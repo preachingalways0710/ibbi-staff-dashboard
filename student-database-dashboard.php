@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.10
+ * Version: 1.0.11
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.10');
+define('SDD_VERSION', '1.0.11');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -97,6 +97,50 @@ function sdd_ajax_dashboard_data() {
     }
 
     wp_send_json_success(sdd_get_overview_data($filters));
+}
+
+add_action('wp_ajax_sdd_export_students', 'sdd_ajax_export_students');
+function sdd_ajax_export_students() {
+    check_ajax_referer('sdd_dashboard', 'nonce');
+
+    if (!sdd_current_user_can_view_dashboard()) {
+        wp_die(esc_html__('Você não tem permissão para exportar estes dados.', 'sdd'), 403);
+    }
+
+    $students = sdd_get_filtered_students(sdd_sanitize_dashboard_filters($_POST));
+
+    nocache_headers();
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=ibbi-alunos-' . gmdate('Y-m-d') . '.csv');
+
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['Nome', 'Email', 'WhatsApp', 'Igreja', 'Cidade', 'Estado', 'Status', 'Nivel', 'Teologia', 'Supervisor', 'Cursos concluidos', 'Cursos matriculados', 'Progresso medio', 'Ultima atividade', 'Prioridade']);
+
+    foreach ($students as $student) {
+        fputcsv(
+            $output,
+            [
+                $student['name'],
+                $student['email'],
+                $student['whatsapp'],
+                $student['church'],
+                $student['city'],
+                $student['state'],
+                $student['status'],
+                $student['level'],
+                $student['theology'],
+                $student['supervisor'],
+                $student['completed_count'],
+                $student['course_count'],
+                $student['average_progress'] . '%',
+                $student['last_activity_label'],
+                sdd_get_attention_label($student['attention_score']),
+            ]
+        );
+    }
+
+    fclose($output);
+    exit;
 }
 
 function sdd_render_staff_dashboard_shortcode($atts = []) {
@@ -248,6 +292,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
             </label>
             <div class="sdd-filter-actions">
                 <button class="sdd-clear-filters" type="button" data-sdd-clear-filters><?php echo esc_html__('Limpar filtros', 'sdd'); ?></button>
+                <button class="sdd-export" type="button" data-sdd-export><?php echo esc_html__('Exportar CSV', 'sdd'); ?></button>
             </div>
         </form>
 

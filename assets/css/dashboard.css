@@ -127,10 +127,12 @@
 .sdd-filter-actions {
   align-items: end;
   display: flex;
+  gap: 8px;
   min-height: 42px;
 }
 
-.sdd-clear-filters {
+.sdd-clear-filters,
+.sdd-export {
   background: #fff;
   border: 1px solid var(--sdd-accent-2);
   border-radius: 0;
@@ -145,8 +147,26 @@
 }
 
 .sdd-clear-filters:hover,
-.sdd-clear-filters:focus {
+.sdd-clear-filters:focus,
+.sdd-export:hover,
+.sdd-export:focus {
   background: #eef7f4;
+}
+
+.sdd-export {
+  background: var(--sdd-accent-2);
+  color: #fff;
+}
+
+.sdd-export:hover,
+.sdd-export:focus {
+  background: #1c4845;
+  color: #fff;
+}
+
+.sdd-export:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }
 
 .sdd-filter-summary {

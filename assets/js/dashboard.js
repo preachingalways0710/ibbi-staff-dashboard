@@ -5,6 +5,7 @@
     const tabs = Array.from(dashboard.querySelectorAll('[data-sdd-view]'));
     const filters = dashboard.querySelector('[data-sdd-filters]');
     const clearFilters = dashboard.querySelector('[data-sdd-clear-filters]');
+    const exportButton = dashboard.querySelector('[data-sdd-export]');
     const results = dashboard.querySelector('[data-sdd-results]');
     let activeView = 'overview';
     let debounceTimer = null;
@@ -86,6 +87,44 @@
       clearFilters.addEventListener('click', () => {
         filters.reset();
         loadDashboard();
+      });
+    }
+
+    if (exportButton) {
+      exportButton.addEventListener('click', () => {
+        const data = new FormData(filters);
+        data.append('action', 'sdd_export_students');
+        data.append('nonce', sddDashboard.nonce);
+
+        exportButton.disabled = true;
+
+        fetch(sddDashboard.ajaxUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: data
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Export failed');
+            }
+            return response.blob();
+          })
+          .then((blob) => {
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'ibbi-alunos.csv';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(() => {
+            results.innerHTML = '<p class="sdd-empty">' + sddDashboard.labels.error + '</p>';
+          })
+          .finally(() => {
+            exportButton.disabled = false;
+          });
       });
     }
 
