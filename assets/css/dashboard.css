@@ -196,9 +196,10 @@
   background: #fcf8f9;
 }
 
-.sdd-detail-toggle {
+.sdd-dashboard .sdd-table .sdd-detail-toggle {
   background: var(--sdd-accent-2);
   border: 1px solid var(--sdd-accent-2);
+  border-radius: 0;
   color: #fff;
   cursor: pointer;
   display: inline-block;
@@ -207,12 +208,14 @@
   font-weight: 700;
   margin-top: 10px;
   padding: 5px 8px;
+  text-decoration: none;
 }
 
-.sdd-detail-toggle:hover,
-.sdd-detail-toggle:focus {
+.sdd-dashboard .sdd-table .sdd-detail-toggle:hover,
+.sdd-dashboard .sdd-table .sdd-detail-toggle:focus {
   background: #1c4845;
   border-color: #1c4845;
+  color: #fff;
 }
 
 .sdd-pill {
