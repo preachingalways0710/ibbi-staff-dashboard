@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.13
+ * Version: 1.0.14
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.13');
+define('SDD_VERSION', '1.0.14');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -166,6 +166,27 @@ function sdd_ajax_save_student_meta() {
     update_user_meta($student_id, '_bi_staff_updated_by', get_current_user_id());
 
     wp_send_json_success(['message' => __('Dados salvos.', 'sdd')]);
+}
+
+add_action('wp_ajax_sdd_mark_student_contacted', 'sdd_ajax_mark_student_contacted');
+function sdd_ajax_mark_student_contacted() {
+    check_ajax_referer('sdd_dashboard', 'nonce');
+
+    if (!sdd_current_user_can_view_dashboard()) {
+        wp_send_json_error(['message' => __('Você não tem permissão para marcar contato.', 'sdd')], 403);
+    }
+
+    $student_id = isset($_POST['student_id']) ? absint($_POST['student_id']) : 0;
+    if (!$student_id || !get_user_by('id', $student_id)) {
+        wp_send_json_error(['message' => __('Aluno inválido.', 'sdd')], 400);
+    }
+
+    update_user_meta($student_id, '_bi_last_contacted_at', current_time('timestamp'));
+    update_user_meta($student_id, '_bi_last_contacted_by', get_current_user_id());
+    update_user_meta($student_id, '_bi_staff_updated_at', current_time('timestamp'));
+    update_user_meta($student_id, '_bi_staff_updated_by', get_current_user_id());
+
+    wp_send_json_success(['message' => __('Contato marcado.', 'sdd')]);
 }
 
 function sdd_render_staff_dashboard_shortcode($atts = []) {
@@ -535,6 +556,8 @@ function sdd_get_student_summary($user) {
         'admin_notes' => sdd_get_user_meta_first($user_id, ['_bi_admin_notes', 'anotacoes_personalizadas', 'sdd_student_notes']),
         'staff_updated_at' => absint(get_user_meta($user_id, '_bi_staff_updated_at', true)),
         'staff_updated_by' => absint(get_user_meta($user_id, '_bi_staff_updated_by', true)),
+        'last_contacted_at' => absint(get_user_meta($user_id, '_bi_last_contacted_at', true)),
+        'last_contacted_by' => absint(get_user_meta($user_id, '_bi_last_contacted_by', true)),
         'testimony' => sdd_get_user_meta_first($user_id, ['salvacao', 'testemunho']),
         'theology' => sdd_get_user_meta_first($user_id, ['Theology_stance', 'teologia']),
         'first_enrolled_at' => $first_enrolled_at,
@@ -1239,7 +1262,15 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Acompanhamento atualizado', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_staff_update_label($student)); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Último contato', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_last_contact_label($student)); ?></dd></div>
                                         </dl>
+                                        <div class="sdd-quick-actions">
+                                            <?php if ($student['whatsapp']) : ?>
+                                                <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Abrir WhatsApp', 'sdd'); ?></a>
+                                            <?php endif; ?>
+                                            <button type="button" data-sdd-mark-contacted="<?php echo esc_attr($student['id']); ?>"><?php echo esc_html__('Marcar contato hoje', 'sdd'); ?></button>
+                                            <span data-sdd-contact-status></span>
+                                        </div>
                                         <?php if ($student['admin_notes']) : ?>
                                             <div class="sdd-note">
                                                 <strong><?php echo esc_html__('Últimas notícias', 'sdd'); ?></strong>
@@ -1413,6 +1444,23 @@ function sdd_get_staff_update_label($student) {
 
     if (!empty($student['staff_updated_by'])) {
         $user = get_user_by('id', $student['staff_updated_by']);
+        if ($user) {
+            $label .= ' por ' . sdd_get_student_name($user);
+        }
+    }
+
+    return $label;
+}
+
+function sdd_get_last_contact_label($student) {
+    if (empty($student['last_contacted_at'])) {
+        return 'Sem registro';
+    }
+
+    $label = date_i18n('d/m/Y H:i', $student['last_contacted_at']);
+
+    if (!empty($student['last_contacted_by'])) {
+        $user = get_user_by('id', $student['last_contacted_by']);
         if ($user) {
             $label .= ' por ' . sdd_get_student_name($user);
         }

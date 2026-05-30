@@ -555,6 +555,45 @@
   margin: 0;
 }
 
+.sdd-quick-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sdd-quick-actions a,
+.sdd-quick-actions button {
+  background: #fff;
+  border: 1px solid var(--sdd-accent-2);
+  border-radius: 0;
+  color: var(--sdd-accent-2);
+  cursor: pointer;
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  padding: 7px 9px;
+  text-decoration: none;
+}
+
+.sdd-quick-actions button {
+  background: var(--sdd-accent-2);
+  color: #fff;
+}
+
+.sdd-quick-actions button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.sdd-quick-actions span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+}
+
 .sdd-staff-form {
   background: #fff;
   border: 1px solid var(--sdd-border);

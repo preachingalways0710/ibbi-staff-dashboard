@@ -44,6 +44,47 @@
     };
 
     results.addEventListener('click', (event) => {
+      const contactButton = event.target.closest('[data-sdd-mark-contacted]');
+
+      if (contactButton) {
+        const status = contactButton.parentElement.querySelector('[data-sdd-contact-status]');
+        const data = new FormData();
+        data.append('action', 'sdd_mark_student_contacted');
+        data.append('nonce', sddDashboard.nonce);
+        data.append('student_id', contactButton.dataset.sddMarkContacted);
+
+        contactButton.disabled = true;
+        if (status) {
+          status.textContent = 'Marcando...';
+        }
+
+        fetch(sddDashboard.ajaxUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: data
+        })
+          .then((response) => response.json())
+          .then((payload) => {
+            if (!payload || !payload.success) {
+              throw new Error('Contact mark failed');
+            }
+            if (status) {
+              status.textContent = 'Contato marcado';
+            }
+            window.setTimeout(loadDashboard, 650);
+          })
+          .catch(() => {
+            if (status) {
+              status.textContent = 'Erro ao marcar';
+            }
+          })
+          .finally(() => {
+            contactButton.disabled = false;
+          });
+
+        return;
+      }
+
       const toggle = event.target.closest('[data-sdd-toggle]');
 
       if (!toggle) {
