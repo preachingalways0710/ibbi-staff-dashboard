@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.4');
+define('SDD_VERSION', '1.0.5');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -134,6 +134,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
     );
 
     ob_start();
+    $filter_options = sdd_get_student_filter_options();
     ?>
     <section class="sdd-dashboard" data-sdd-dashboard>
         <header class="sdd-dashboard__header">
@@ -216,6 +217,24 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                     <option value="Outra"><?php echo esc_html__('Outra', 'sdd'); ?></option>
                 </select>
             </label>
+            <label>
+                <span><?php echo esc_html__('Igreja', 'sdd'); ?></span>
+                <select name="church">
+                    <option value=""><?php echo esc_html__('Todas', 'sdd'); ?></option>
+                    <?php foreach ($filter_options['churches'] as $church) : ?>
+                        <option value="<?php echo esc_attr($church); ?>"><?php echo esc_html($church); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label>
+                <span><?php echo esc_html__('Supervisor', 'sdd'); ?></span>
+                <select name="supervisor">
+                    <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
+                    <?php foreach ($filter_options['supervisors'] as $supervisor) : ?>
+                        <option value="<?php echo esc_attr($supervisor); ?>"><?php echo esc_html($supervisor); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
         </form>
 
         <div class="sdd-results" data-sdd-results aria-live="polite">
@@ -249,6 +268,37 @@ function sdd_sanitize_dashboard_filters($input) {
         'signal' => isset($input['signal']) ? sanitize_key(wp_unslash($input['signal'])) : '',
         'level' => isset($input['level']) ? sanitize_text_field(wp_unslash($input['level'])) : '',
         'theology' => isset($input['theology']) ? sanitize_text_field(wp_unslash($input['theology'])) : '',
+        'church' => isset($input['church']) ? sanitize_text_field(wp_unslash($input['church'])) : '',
+        'supervisor' => isset($input['supervisor']) ? sanitize_text_field(wp_unslash($input['supervisor'])) : '',
+    ];
+}
+
+function sdd_get_student_filter_options() {
+    $churches = [];
+    $supervisors = [];
+
+    foreach (sdd_get_student_users() as $user) {
+        $church = sdd_get_user_meta_first($user->ID, ['_bi_church', 'church_name', 'igreja']);
+        $supervisor = sdd_get_user_meta_first($user->ID, ['_bi_supervisor', 'supervisor']);
+
+        if ($church) {
+            $churches[] = $church;
+        }
+
+        if ($supervisor) {
+            $supervisors[] = $supervisor;
+        }
+    }
+
+    $churches = array_values(array_unique(array_filter(array_map('trim', $churches))));
+    $supervisors = array_values(array_unique(array_filter(array_map('trim', $supervisors))));
+
+    natcasesort($churches);
+    natcasesort($supervisors);
+
+    return [
+        'churches' => array_values($churches),
+        'supervisors' => array_values($supervisors),
     ];
 }
 
@@ -456,6 +506,14 @@ function sdd_student_matches_filters($student, $filters) {
     }
 
     if ($filters['theology'] && 0 !== strcasecmp($student['theology'], $filters['theology'])) {
+        return false;
+    }
+
+    if ($filters['church'] && 0 !== strcasecmp($student['church'], $filters['church'])) {
+        return false;
+    }
+
+    if ($filters['supervisor'] && 0 !== strcasecmp($student['supervisor'], $filters['supervisor'])) {
         return false;
     }
 
