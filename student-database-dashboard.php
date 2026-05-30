@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.2');
+define('SDD_VERSION', '1.0.3');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -531,6 +531,7 @@ function sdd_get_course_summaries($students) {
                     'inactive' => 0,
                     'near_complete' => 0,
                     'not_started' => 0,
+                    'attention_students' => [],
                 ];
             }
 
@@ -555,6 +556,19 @@ function sdd_get_course_summaries($students) {
 
             if (!$student['last_activity'] || $student['last_activity'] < time() - (30 * DAY_IN_SECONDS)) {
                 $courses[$course['id']]['inactive']++;
+            }
+
+            if (!$course['completed'] && ($course['progress'] < 35 || !$student['last_activity'] || $student['last_activity'] < time() - (30 * DAY_IN_SECONDS))) {
+                $courses[$course['id']]['attention_students'][] = [
+                    'id' => $student['id'],
+                    'name' => $student['name'],
+                    'email' => $student['email'],
+                    'whatsapp' => $student['whatsapp'],
+                    'progress' => $course['progress'],
+                    'status' => $course['status'],
+                    'last_activity_label' => $student['last_activity_label'],
+                    'signals' => $student['signals'],
+                ];
             }
         }
     }
@@ -781,13 +795,49 @@ function sdd_render_course_view($courses) {
                 </thead>
                 <tbody>
                     <?php foreach ($courses as $course) : ?>
-                        <?php $average = $course['students'] ? round($course['progress_sum'] / $course['students']) : 0; ?>
-                        <tr>
+                        <?php $detail_id = 'sdd-course-detail-' . absint($course['id']); ?>
+                        <tr class="sdd-course-row">
                             <td><strong><?php echo esc_html($course['title']); ?></strong></td>
                             <td><?php echo esc_html($course['students']); ?></td>
                             <td><?php echo esc_html($course['completed']); ?></td>
-                            <td><?php echo sdd_progress_bar($average); ?></td>
-                            <td><?php echo esc_html($course['stalled'] . ' aluno(s) abaixo de 35%'); ?></td>
+                            <td><?php echo sdd_progress_bar($course['average_progress']); ?></td>
+                            <td>
+                                <strong><?php echo esc_html($course['stalled'] . ' abaixo de 35%'); ?></strong>
+                                <span><?php echo esc_html($course['inactive'] . ' inativos · ' . $course['not_started'] . ' sem progresso'); ?></span>
+                                <button class="sdd-detail-toggle" type="button" data-sdd-toggle="<?php echo esc_attr($detail_id); ?>" aria-expanded="false" aria-controls="<?php echo esc_attr($detail_id); ?>">
+                                    <?php echo esc_html__('Ver alunos', 'sdd'); ?>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr id="<?php echo esc_attr($detail_id); ?>" class="sdd-detail-row" hidden>
+                            <td colspan="5">
+                                <div class="sdd-course-detail">
+                                    <div class="sdd-course-stat-grid">
+                                        <?php sdd_small_stat('Não iniciaram', $course['not_started']); ?>
+                                        <?php sdd_small_stat('Abaixo de 35%', $course['stalled']); ?>
+                                        <?php sdd_small_stat('Inativos 30+ dias', $course['inactive']); ?>
+                                        <?php sdd_small_stat('Perto de concluir', $course['near_complete']); ?>
+                                    </div>
+                                    <h4><?php echo esc_html__('Alunos que precisam de atenção nesta matéria', 'sdd'); ?></h4>
+                                    <?php if ($course['attention_students']) : ?>
+                                        <div class="sdd-attention-list">
+                                            <?php foreach (array_slice($course['attention_students'], 0, 12) as $student) : ?>
+                                                <article class="sdd-attention-item">
+                                                    <div>
+                                                        <strong><?php echo esc_html($student['name']); ?></strong>
+                                                        <span><?php echo esc_html($student['last_activity_label'] . ' · ' . $student['progress'] . '%'); ?></span>
+                                                    </div>
+                                                    <?php if ($student['whatsapp']) : ?>
+                                                        <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
+                                                    <?php endif; ?>
+                                                </article>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else : ?>
+                                        <p class="sdd-empty sdd-empty--inline"><?php echo esc_html__('Nenhum aluno crítico nesta matéria.', 'sdd'); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -796,6 +846,15 @@ function sdd_render_course_view($courses) {
     </div>
     <?php
     return ob_get_clean();
+}
+
+function sdd_small_stat($label, $value) {
+    ?>
+    <div class="sdd-small-stat">
+        <strong><?php echo esc_html($value); ?></strong>
+        <span><?php echo esc_html($label); ?></span>
+    </div>
+    <?php
 }
 
 function sdd_progress_bar($percent) {
