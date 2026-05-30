@@ -1,0 +1,263 @@
+.sdd-dashboard {
+  --sdd-border: #d8dee7;
+  --sdd-muted: #5f6875;
+  --sdd-text: #1f2933;
+  --sdd-surface: #ffffff;
+  --sdd-band: #f6f8fb;
+  --sdd-accent: #7a1f2b;
+  --sdd-accent-2: #255f5b;
+  color: var(--sdd-text);
+  font-family: inherit;
+  margin: 0 auto;
+  max-width: 1180px;
+}
+
+.sdd-dashboard *,
+.sdd-dashboard *::before,
+.sdd-dashboard *::after {
+  box-sizing: border-box;
+}
+
+.sdd-dashboard__header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.sdd-dashboard__eyebrow {
+  color: var(--sdd-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.sdd-dashboard h2,
+.sdd-dashboard h3 {
+  color: var(--sdd-text);
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.sdd-dashboard h2 {
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+}
+
+.sdd-dashboard h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.sdd-dashboard__status {
+  background: #eef7f4;
+  border: 1px solid #b8d7cf;
+  color: #214f4b;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.sdd-tabs {
+  border-bottom: 1px solid var(--sdd-border);
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.sdd-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--sdd-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 4px 10px;
+  white-space: nowrap;
+}
+
+.sdd-tab.is-active {
+  border-color: var(--sdd-accent);
+  color: var(--sdd-text);
+}
+
+.sdd-filters {
+  align-items: end;
+  background: var(--sdd-band);
+  border: 1px solid var(--sdd-border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(150px, 1fr));
+  margin-bottom: 18px;
+  padding: 14px;
+}
+
+.sdd-filters label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.sdd-filters span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sdd-filters input,
+.sdd-filters select {
+  background: #fff;
+  border: 1px solid #bfc8d4;
+  border-radius: 0;
+  color: var(--sdd-text);
+  font: inherit;
+  min-height: 42px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.sdd-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 20px;
+}
+
+.sdd-metric {
+  background: var(--sdd-surface);
+  border: 1px solid var(--sdd-border);
+  padding: 14px;
+}
+
+.sdd-metric span,
+.sdd-metric small {
+  color: var(--sdd-muted);
+  display: block;
+  font-size: 12px;
+}
+
+.sdd-metric strong {
+  display: block;
+  font-size: 30px;
+  line-height: 1.1;
+  margin: 8px 0 4px;
+}
+
+.sdd-table-wrap {
+  overflow-x: auto;
+}
+
+.sdd-table {
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 840px;
+  width: 100%;
+}
+
+.sdd-table th,
+.sdd-table td {
+  border-bottom: 1px solid var(--sdd-border);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.sdd-table th {
+  background: #f2f4f7;
+  color: #3d4652;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.sdd-table td strong,
+.sdd-table td span,
+.sdd-table td a {
+  display: block;
+}
+
+.sdd-table td span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.sdd-table a {
+  color: var(--sdd-accent);
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.sdd-pill {
+  background: #f4ecee;
+  border: 1px solid #dfc2c8;
+  color: var(--sdd-accent);
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.sdd-progress {
+  align-items: center;
+  background: #e9edf2;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  min-width: 120px;
+  overflow: hidden;
+  position: relative;
+}
+
+.sdd-progress span {
+  background: var(--sdd-accent-2);
+  display: block;
+  height: 12px;
+  margin: 0;
+}
+
+.sdd-progress strong {
+  color: var(--sdd-text);
+  font-size: 12px;
+  padding-right: 6px;
+}
+
+.sdd-detail-row td {
+  background: #fbfcfd;
+  padding-top: 0;
+}
+
+.sdd-course-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.sdd-course-list div {
+  border-left: 3px solid var(--sdd-accent-2);
+  padding-left: 8px;
+}
+
+.sdd-loading,
+.sdd-empty,
+.sdd-dashboard-message {
+  background: var(--sdd-band);
+  border: 1px solid var(--sdd-border);
+  color: var(--sdd-muted);
+  padding: 16px;
+}
+
+@media (max-width: 860px) {
+  .sdd-dashboard__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sdd-filters,
+  .sdd-metrics {
+    grid-template-columns: 1fr;
+  }
+}
