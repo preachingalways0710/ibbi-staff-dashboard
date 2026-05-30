@@ -192,6 +192,24 @@
   margin-top: 8px;
 }
 
+.sdd-student-row.is-expanded td {
+  background: #fcf8f9;
+}
+
+.sdd-detail-toggle {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--sdd-accent);
+  cursor: pointer;
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 10px;
+  padding: 0;
+}
+
 .sdd-pill {
   background: #f4ecee;
   border: 1px solid #dfc2c8;
@@ -200,6 +218,24 @@
   font-size: 12px;
   font-weight: 700;
   padding: 4px 8px;
+}
+
+.sdd-signal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.sdd-signal {
+  background: #fff6d8;
+  border: 1px solid #e6ce7f;
+  color: #6a5215;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 4px 6px;
 }
 
 .sdd-progress {
@@ -231,6 +267,62 @@
   padding: 18px 14px 20px;
 }
 
+.sdd-student-detail {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.4fr);
+}
+
+.sdd-student-detail h4 {
+  color: var(--sdd-text);
+  font-size: 14px;
+  letter-spacing: 0;
+  margin: 0 0 12px;
+}
+
+.sdd-detail-list {
+  display: grid;
+  gap: 8px 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.sdd-detail-list div {
+  border-bottom: 1px solid #e9edf2;
+  padding-bottom: 8px;
+}
+
+.sdd-detail-list dt {
+  color: var(--sdd-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sdd-detail-list dd {
+  color: var(--sdd-text);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+.sdd-note {
+  background: #fff;
+  border: 1px solid var(--sdd-border);
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.sdd-note strong {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.sdd-note p {
+  color: var(--sdd-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
 .sdd-course-list {
   display: grid;
   gap: 14px 18px;
@@ -256,6 +348,10 @@
   padding: 16px;
 }
 
+.sdd-empty--inline {
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .sdd-dashboard__header {
     align-items: flex-start;
@@ -264,6 +360,11 @@
 
   .sdd-filters,
   .sdd-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .sdd-student-detail,
+  .sdd-detail-list {
     grid-template-columns: 1fr;
   }
 }

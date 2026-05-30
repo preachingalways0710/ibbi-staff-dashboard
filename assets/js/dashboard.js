@@ -41,6 +41,26 @@
         });
     };
 
+    results.addEventListener('click', (event) => {
+      const toggle = event.target.closest('[data-sdd-toggle]');
+
+      if (!toggle) {
+        return;
+      }
+
+      const detail = document.getElementById(toggle.dataset.sddToggle);
+
+      if (!detail) {
+        return;
+      }
+
+      const isOpening = detail.hasAttribute('hidden');
+      detail.toggleAttribute('hidden', !isOpening);
+      toggle.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+      toggle.textContent = isOpening ? 'Ocultar detalhes' : 'Ver detalhes';
+      toggle.closest('tr')?.classList.toggle('is-expanded', isOpening);
+    });
+
     const debounceLoad = () => {
       window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(loadDashboard, 250);

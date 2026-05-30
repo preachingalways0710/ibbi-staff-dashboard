@@ -339,17 +339,36 @@ function sdd_get_student_summary($user) {
     }
 
     $last_activity = sdd_get_student_last_activity($user_id);
+    $enrolled_dates = array_filter(wp_list_pluck($courses, 'enrolled_at'));
+    $first_enrolled_at = '';
 
-    return [
+    if ($enrolled_dates) {
+        usort($enrolled_dates, static function ($a, $b) {
+            return strtotime($a) <=> strtotime($b);
+        });
+        $first_enrolled_at = reset($enrolled_dates);
+    }
+
+    $student = [
         'id' => $user_id,
         'name' => sdd_get_student_name($user),
         'email' => $user->user_email,
         'whatsapp' => sdd_get_user_meta_first($user_id, ['_bi_whatsapp', 'phone', 'billing_phone']),
+        'birthdate' => sdd_get_user_meta_first($user_id, ['data_de_nascimento', 'birthdate']),
         'church' => sdd_get_user_meta_first($user_id, ['_bi_church', 'church_name', 'igreja']),
+        'pastor' => sdd_get_user_meta_first($user_id, ['_bi_pastor', 'Pastor_name', 'pastor']),
         'city' => sdd_get_user_meta_first($user_id, ['cidade', 'city']),
         'state' => sdd_get_user_meta_first($user_id, ['estado', 'state']),
         'status' => sdd_get_user_meta_first($user_id, ['_bi_student_status', 'status_aluno'], 'Ativo'),
+        'level' => sdd_get_user_meta_first($user_id, ['_bi_level', 'nivel', 'nivel_associacao']),
+        'payment' => sdd_get_user_meta_first($user_id, ['_bi_payment_status', 'pagamento', 'es']),
+        'supervisor' => sdd_get_user_meta_first($user_id, ['_bi_supervisor', 'supervisor']),
+        'co_validation' => sdd_get_user_meta_first($user_id, ['_bi_covalidation_status', 'co_validacao', 'validacao']),
+        'admin_notes' => sdd_get_user_meta_first($user_id, ['_bi_admin_notes', 'anotacoes_personalizadas', 'sdd_student_notes']),
+        'testimony' => sdd_get_user_meta_first($user_id, ['salvacao', 'testemunho']),
         'theology' => sdd_get_user_meta_first($user_id, ['Theology_stance', 'teologia']),
+        'first_enrolled_at' => $first_enrolled_at,
+        'first_enrolled_label' => $first_enrolled_at ? date_i18n('d/m/Y', strtotime($first_enrolled_at)) : 'Sem registro',
         'last_activity' => $last_activity,
         'last_activity_label' => $last_activity ? date_i18n('d/m/Y', $last_activity) : 'Sem registro',
         'course_count' => $course_count,
@@ -357,6 +376,41 @@ function sdd_get_student_summary($user) {
         'average_progress' => $average_progress,
         'courses' => $courses,
     ];
+
+    $student['signals'] = sdd_get_student_signals($student);
+
+    return $student;
+}
+
+function sdd_get_student_signals($student) {
+    $signals = [];
+
+    if (!$student['last_activity']) {
+        $signals[] = 'Sem atividade registrada';
+    } else {
+        $inactive_days = floor((time() - $student['last_activity']) / DAY_IN_SECONDS);
+        if ($inactive_days >= 60) {
+            $signals[] = 'Inativo há 60+ dias';
+        } elseif ($inactive_days >= 30) {
+            $signals[] = 'Inativo há 30+ dias';
+        } elseif ($inactive_days >= 14) {
+            $signals[] = 'Inativo há 14+ dias';
+        }
+    }
+
+    if ($student['course_count'] > 0 && 0 === $student['average_progress']) {
+        $signals[] = 'Matriculado sem progresso';
+    } elseif ($student['course_count'] > 0 && $student['average_progress'] < 35) {
+        $signals[] = 'Progresso baixo';
+    } elseif ($student['course_count'] > 0 && $student['average_progress'] >= 85 && $student['completed_count'] < $student['course_count']) {
+        $signals[] = 'Perto de concluir';
+    }
+
+    if (0 === strcasecmp($student['status'], 'Parado') || 0 === strcasecmp($student['status'], 'Trancado')) {
+        $signals[] = 'Requer acompanhamento';
+    }
+
+    return array_values(array_unique($signals));
 }
 
 function sdd_student_matches_filters($student, $filters) {
@@ -538,13 +592,17 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                 </thead>
                 <tbody>
                     <?php foreach ($students as $student) : ?>
-                        <tr>
+                        <?php $detail_id = 'sdd-student-detail-' . absint($student['id']); ?>
+                        <tr class="sdd-student-row">
                             <td>
                                 <strong><?php echo esc_html($student['name']); ?></strong>
                                 <span><?php echo esc_html($student['email']); ?></span>
                                 <?php if ($student['whatsapp']) : ?>
                                     <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
                                 <?php endif; ?>
+                                <button class="sdd-detail-toggle" type="button" data-sdd-toggle="<?php echo esc_attr($detail_id); ?>" aria-expanded="false" aria-controls="<?php echo esc_attr($detail_id); ?>">
+                                    <?php echo esc_html__('Ver detalhes', 'sdd'); ?>
+                                </button>
                             </td>
                             <td>
                                 <?php echo esc_html($student['church'] ?: 'Não informado'); ?>
@@ -553,11 +611,42 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                             <td><span class="sdd-pill"><?php echo esc_html($student['status']); ?></span></td>
                             <td><?php echo esc_html($student['completed_count'] . '/' . $student['course_count']); ?></td>
                             <td><?php echo sdd_progress_bar($student['average_progress']); ?></td>
-                            <td><?php echo esc_html($student['last_activity_label']); ?></td>
+                            <td>
+                                <?php echo esc_html($student['last_activity_label']); ?>
+                                <?php if ($student['signals']) : ?>
+                                    <div class="sdd-signal-list">
+                                        <?php foreach ($student['signals'] as $signal) : ?>
+                                            <span class="sdd-signal"><?php echo esc_html($signal); ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                         </tr>
-                        <?php if ($student['courses']) : ?>
-                            <tr class="sdd-detail-row">
-                                <td colspan="6">
+                        <tr id="<?php echo esc_attr($detail_id); ?>" class="sdd-detail-row" hidden>
+                            <td colspan="6">
+                                <div class="sdd-student-detail">
+                                    <section>
+                                        <h4><?php echo esc_html__('Resumo do aluno', 'sdd'); ?></h4>
+                                        <dl class="sdd-detail-list">
+                                            <div><dt><?php echo esc_html__('Matrícula', 'sdd'); ?></dt><dd><?php echo esc_html($student['first_enrolled_label']); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Nascimento', 'sdd'); ?></dt><dd><?php echo esc_html($student['birthdate'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Pastor', 'sdd'); ?></dt><dd><?php echo esc_html($student['pastor'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Teologia', 'sdd'); ?></dt><dd><?php echo esc_html($student['theology'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Nível', 'sdd'); ?></dt><dd><?php echo esc_html($student['level'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Pagamento', 'sdd'); ?></dt><dd><?php echo esc_html($student['payment'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Supervisor', 'sdd'); ?></dt><dd><?php echo esc_html($student['supervisor'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
+                                        </dl>
+                                        <?php if ($student['admin_notes']) : ?>
+                                            <div class="sdd-note">
+                                                <strong><?php echo esc_html__('Últimas notícias', 'sdd'); ?></strong>
+                                                <p><?php echo nl2br(esc_html($student['admin_notes'])); ?></p>
+                                            </div>
+                                        <?php endif; ?>
+                                    </section>
+                                    <section>
+                                        <h4><?php echo esc_html__('Progresso nas matérias', 'sdd'); ?></h4>
+                                        <?php if ($student['courses']) : ?>
                                     <div class="sdd-course-list">
                                         <?php foreach ($student['courses'] as $course) : ?>
                                             <div>
@@ -566,9 +655,13 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
-                                </td>
-                            </tr>
-                        <?php endif; ?>
+                                        <?php else : ?>
+                                            <p class="sdd-empty sdd-empty--inline"><?php echo esc_html__('Nenhuma matrícula encontrada.', 'sdd'); ?></p>
+                                        <?php endif; ?>
+                                    </section>
+                                </div>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
