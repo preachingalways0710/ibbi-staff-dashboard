@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.12
+ * Version: 1.0.13
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.12');
+define('SDD_VERSION', '1.0.13');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -162,6 +162,8 @@ function sdd_ajax_save_student_meta() {
     update_user_meta($student_id, '_bi_supervisor', sanitize_text_field(wp_unslash($_POST['supervisor'] ?? '')));
     update_user_meta($student_id, '_bi_covalidation_status', sanitize_text_field(wp_unslash($_POST['co_validation'] ?? '')));
     update_user_meta($student_id, '_bi_admin_notes', sanitize_textarea_field(wp_unslash($_POST['admin_notes'] ?? '')));
+    update_user_meta($student_id, '_bi_staff_updated_at', current_time('timestamp'));
+    update_user_meta($student_id, '_bi_staff_updated_by', get_current_user_id());
 
     wp_send_json_success(['message' => __('Dados salvos.', 'sdd')]);
 }
@@ -531,6 +533,8 @@ function sdd_get_student_summary($user) {
         'supervisor' => sdd_get_user_meta_first($user_id, ['_bi_supervisor', 'supervisor']),
         'co_validation' => sdd_get_user_meta_first($user_id, ['_bi_covalidation_status', 'co_validacao', 'validacao']),
         'admin_notes' => sdd_get_user_meta_first($user_id, ['_bi_admin_notes', 'anotacoes_personalizadas', 'sdd_student_notes']),
+        'staff_updated_at' => absint(get_user_meta($user_id, '_bi_staff_updated_at', true)),
+        'staff_updated_by' => absint(get_user_meta($user_id, '_bi_staff_updated_by', true)),
         'testimony' => sdd_get_user_meta_first($user_id, ['salvacao', 'testemunho']),
         'theology' => sdd_get_user_meta_first($user_id, ['Theology_stance', 'teologia']),
         'first_enrolled_at' => $first_enrolled_at,
@@ -1234,6 +1238,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Supervisor', 'sdd'); ?></dt><dd><?php echo esc_html($student['supervisor'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Acompanhamento atualizado', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_staff_update_label($student)); ?></dd></div>
                                         </dl>
                                         <?php if ($student['admin_notes']) : ?>
                                             <div class="sdd-note">
@@ -1397,6 +1402,23 @@ function sdd_get_attention_label($score) {
     }
 
     return 'Normal';
+}
+
+function sdd_get_staff_update_label($student) {
+    if (empty($student['staff_updated_at'])) {
+        return 'Sem registro';
+    }
+
+    $label = date_i18n('d/m/Y H:i', $student['staff_updated_at']);
+
+    if (!empty($student['staff_updated_by'])) {
+        $user = get_user_by('id', $student['staff_updated_by']);
+        if ($user) {
+            $label .= ' por ' . sdd_get_student_name($user);
+        }
+    }
+
+    return $label;
 }
 
 function sdd_small_stat($label, $value) {
