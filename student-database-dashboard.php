@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.15
+ * Version: 1.0.16
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.15');
+define('SDD_VERSION', '1.0.16');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -1029,6 +1029,7 @@ function sdd_render_overview($students, $metrics) {
 
     ob_start();
     ?>
+    <?php sdd_render_overview_focus($followup_students, $inactive_students, $near_completion_students, $course_bottlenecks); ?>
     <div class="sdd-metrics">
         <?php sdd_metric_card('Alunos', $metrics['total'], 'no filtro atual'); ?>
         <?php sdd_metric_card('Progresso médio', $metrics['average_progress'] . '%', 'entre alunos listados'); ?>
@@ -1056,6 +1057,36 @@ function sdd_render_overview($students, $metrics) {
     <?php echo sdd_render_person_view(array_slice($followup_students ?: $students, 0, 12), 'Alunos para acompanhar'); ?>
     <?php
     return ob_get_clean();
+}
+
+function sdd_render_overview_focus($followup_students, $inactive_students, $near_completion_students, $course_bottlenecks) {
+    $top_course = $course_bottlenecks ? reset($course_bottlenecks) : null;
+    ?>
+    <section class="sdd-focus-strip">
+        <header>
+            <h3><?php echo esc_html__('Foco do momento', 'sdd'); ?></h3>
+            <span><?php echo esc_html__('Resumo rápido para decidir onde agir primeiro.', 'sdd'); ?></span>
+        </header>
+        <div class="sdd-focus-items">
+            <article>
+                <strong><?php echo esc_html(count($followup_students)); ?></strong>
+                <span><?php echo esc_html__('aluno(s) com sinal de acompanhamento', 'sdd'); ?></span>
+            </article>
+            <article>
+                <strong><?php echo esc_html(count($inactive_students)); ?></strong>
+                <span><?php echo esc_html__('sem atividade recente', 'sdd'); ?></span>
+            </article>
+            <article>
+                <strong><?php echo esc_html(count($near_completion_students)); ?></strong>
+                <span><?php echo esc_html__('perto de concluir', 'sdd'); ?></span>
+            </article>
+            <article>
+                <strong><?php echo esc_html($top_course ? $top_course['title'] : 'Sem gargalo'); ?></strong>
+                <span><?php echo esc_html($top_course ? 'curso com maior gargalo' : 'nenhum curso crítico no filtro'); ?></span>
+            </article>
+        </div>
+    </section>
+    <?php
 }
 
 function sdd_get_overview_insights($students) {

@@ -206,6 +206,61 @@
   padding: 4px 7px;
 }
 
+.sdd-focus-strip {
+  background: #f7fbfa;
+  border: 1px solid #b8d7cf;
+  margin-bottom: 16px;
+  padding: 14px;
+}
+
+.sdd-focus-strip header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sdd-focus-strip h3 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.sdd-focus-strip header span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+}
+
+.sdd-focus-items {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sdd-focus-items article {
+  background: #fff;
+  border-left: 3px solid var(--sdd-accent-2);
+  padding: 10px 12px;
+}
+
+.sdd-focus-items strong,
+.sdd-focus-items span {
+  display: block;
+}
+
+.sdd-focus-items strong {
+  font-size: 20px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.sdd-focus-items span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
 .sdd-metrics {
   display: grid;
   gap: 12px;
@@ -782,6 +837,7 @@
   }
 
   .sdd-filters,
+  .sdd-focus-items,
   .sdd-metrics,
   .sdd-visual-grid,
   .sdd-overview-grid {
