@@ -147,6 +147,67 @@
   margin: 8px 0 4px;
 }
 
+.sdd-overview-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 22px;
+}
+
+.sdd-overview-panel {
+  background: #fff;
+  border: 1px solid var(--sdd-border);
+  padding: 14px;
+}
+
+.sdd-overview-panel header {
+  border-bottom: 1px solid #e9edf2;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+
+.sdd-overview-panel h3 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.sdd-overview-panel header span {
+  color: var(--sdd-muted);
+  display: block;
+  font-size: 12px;
+}
+
+.sdd-overview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sdd-overview-item {
+  background: #fbfcfd;
+  border-left: 3px solid var(--sdd-accent-2);
+  padding: 10px 12px;
+}
+
+.sdd-overview-item strong,
+.sdd-overview-item span {
+  display: block;
+}
+
+.sdd-overview-item strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.sdd-overview-item > span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.sdd-overview-item .sdd-progress {
+  margin-top: 8px;
+}
+
 .sdd-table-wrap {
   overflow-x: auto;
 }
@@ -367,7 +428,8 @@
   }
 
   .sdd-filters,
-  .sdd-metrics {
+  .sdd-metrics,
+  .sdd-overview-grid {
     grid-template-columns: 1fr;
   }
 

@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.1');
+define('SDD_VERSION', '1.0.2');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -498,6 +498,7 @@ function sdd_get_overview_data($filters) {
             'inactive_30' => $inactive_30,
             'needs_followup' => $needs_followup,
             'average_progress' => $total ? round($progress_sum / $total) : 0,
+            'course_bottlenecks' => sdd_get_course_summaries($students),
         ]),
     ];
 }
@@ -509,7 +510,12 @@ function sdd_get_person_view_data($filters) {
 }
 
 function sdd_get_course_view_data($filters) {
-    $students = sdd_get_filtered_students($filters);
+    return [
+        'html' => sdd_render_course_view(sdd_get_course_summaries(sdd_get_filtered_students($filters))),
+    ];
+}
+
+function sdd_get_course_summaries($students) {
     $courses = [];
 
     foreach ($students as $student) {
@@ -522,6 +528,9 @@ function sdd_get_course_view_data($filters) {
                     'completed' => 0,
                     'progress_sum' => 0,
                     'stalled' => 0,
+                    'inactive' => 0,
+                    'near_complete' => 0,
+                    'not_started' => 0,
                 ];
             }
 
@@ -535,19 +544,55 @@ function sdd_get_course_view_data($filters) {
             if (!$course['completed'] && $course['progress'] < 35) {
                 $courses[$course['id']]['stalled']++;
             }
+
+            if (!$course['completed'] && 0 === absint($course['progress'])) {
+                $courses[$course['id']]['not_started']++;
+            }
+
+            if (!$course['completed'] && $course['progress'] >= 85) {
+                $courses[$course['id']]['near_complete']++;
+            }
+
+            if (!$student['last_activity'] || $student['last_activity'] < time() - (30 * DAY_IN_SECONDS)) {
+                $courses[$course['id']]['inactive']++;
+            }
         }
     }
 
+    foreach ($courses as &$course) {
+        $course['average_progress'] = $course['students'] ? round($course['progress_sum'] / $course['students']) : 0;
+        $course['bottleneck_score'] = ($course['stalled'] * 3) + ($course['inactive'] * 2) + $course['not_started'];
+    }
+    unset($course);
+
     uasort($courses, static function ($a, $b) {
-        return strcasecmp($a['title'], $b['title']);
+        if ($a['bottleneck_score'] === $b['bottleneck_score']) {
+            return $a['average_progress'] <=> $b['average_progress'];
+        }
+
+        return $b['bottleneck_score'] <=> $a['bottleneck_score'];
     });
 
-    return [
-        'html' => sdd_render_course_view(array_values($courses)),
-    ];
+    return array_values($courses);
 }
 
 function sdd_render_overview($students, $metrics) {
+    $followup_students = array_values(array_filter($students, static function ($student) {
+        return $student['signals'];
+    }));
+    $inactive_students = array_values(array_filter($students, static function ($student) {
+        return !$student['last_activity'] || $student['last_activity'] < time() - (30 * DAY_IN_SECONDS);
+    }));
+    $near_completion_students = array_values(array_filter($students, static function ($student) {
+        return $student['course_count'] > 0 && $student['average_progress'] >= 85 && $student['completed_count'] < $student['course_count'];
+    }));
+    $no_progress_students = array_values(array_filter($students, static function ($student) {
+        return $student['course_count'] > 0 && 0 === absint($student['average_progress']);
+    }));
+    $course_bottlenecks = array_slice(array_filter($metrics['course_bottlenecks'], static function ($course) {
+        return $course['bottleneck_score'] > 0;
+    }), 0, 5);
+
     ob_start();
     ?>
     <div class="sdd-metrics">
@@ -556,9 +601,54 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Inativos 30+ dias', $metrics['inactive_30'], 'precisam de atenção'); ?>
         <?php sdd_metric_card('Follow-up', $metrics['needs_followup'], 'baixo progresso/parado'); ?>
     </div>
-    <?php echo sdd_render_person_view(array_slice($students, 0, 12), 'Alunos para acompanhar'); ?>
+    <div class="sdd-overview-grid">
+        <?php sdd_render_overview_panel('Precisam de acompanhamento', 'Sinais calculados pelo sistema', $followup_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Parados recentemente', 'Sem atividade nos últimos 30 dias', $inactive_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Perto de concluir', 'Progresso alto, mas ainda incompleto', $near_completion_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Sem progresso após matrícula', 'Matriculados com progresso em 0%', $no_progress_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Cursos com gargalo', 'Mais alunos parados ou com baixo progresso', $course_bottlenecks, 'course'); ?>
+    </div>
+    <?php echo sdd_render_person_view(array_slice($followup_students ?: $students, 0, 12), 'Alunos para acompanhar'); ?>
     <?php
     return ob_get_clean();
+}
+
+function sdd_render_overview_panel($title, $hint, $items, $type) {
+    ?>
+    <section class="sdd-overview-panel">
+        <header>
+            <h3><?php echo esc_html($title); ?></h3>
+            <span><?php echo esc_html($hint); ?></span>
+        </header>
+        <?php if (!$items) : ?>
+            <p class="sdd-empty sdd-empty--inline"><?php echo esc_html__('Nada crítico neste filtro.', 'sdd'); ?></p>
+        <?php else : ?>
+            <div class="sdd-overview-list">
+                <?php foreach (array_slice($items, 0, 5) as $item) : ?>
+                    <?php if ('course' === $type) : ?>
+                        <article class="sdd-overview-item">
+                            <strong><?php echo esc_html($item['title']); ?></strong>
+                            <span><?php echo esc_html($item['stalled'] . ' abaixo de 35% · ' . $item['inactive'] . ' inativos'); ?></span>
+                            <?php echo sdd_progress_bar($item['average_progress']); ?>
+                        </article>
+                    <?php else : ?>
+                        <article class="sdd-overview-item">
+                            <strong><?php echo esc_html($item['name']); ?></strong>
+                            <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                            <?php if ($item['signals']) : ?>
+                                <div class="sdd-signal-list">
+                                    <?php foreach (array_slice($item['signals'], 0, 2) as $signal) : ?>
+                                        <span class="sdd-signal"><?php echo esc_html($signal); ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+    <?php
 }
 
 function sdd_metric_card($label, $value, $hint) {
