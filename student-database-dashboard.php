@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.9');
+define('SDD_VERSION', '1.0.10');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -908,6 +908,7 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Com conclusão', $metrics['insights']['students_with_completion'], 'alunos com 1+ curso concluído'); ?>
     </div>
     <div class="sdd-visual-grid">
+        <?php sdd_render_distribution_panel('Matrículas nos últimos 6 meses', 'Novos alunos por mês', $metrics['insights']['enrollment_trend']); ?>
         <?php sdd_render_distribution_panel('Distribuição de progresso', 'Onde os alunos estão no caminho acadêmico', $metrics['insights']['progress_distribution']); ?>
         <?php sdd_render_distribution_panel('Níveis', 'Básico, Intermediário e Avançado', $metrics['insights']['levels']); ?>
         <?php sdd_render_distribution_panel('Teologia', 'Perfil declarado pelos alunos', $metrics['insights']['theologies']); ?>
@@ -940,6 +941,7 @@ function sdd_get_overview_insights($students) {
         '85-99%' => 0,
         '100%' => 0,
     ];
+    $enrollment_trend = sdd_get_recent_month_buckets(6, $now);
     $levels = [];
     $theologies = [];
     $churches = [];
@@ -953,6 +955,13 @@ function sdd_get_overview_insights($students) {
 
         if ($enrolled_at >= $six_months_ago) {
             $enrolled_six_months++;
+        }
+
+        if ($enrolled_at) {
+            $month_key = date_i18n('M/y', $enrolled_at);
+            if (isset($enrollment_trend[$month_key])) {
+                $enrollment_trend[$month_key]++;
+            }
         }
 
         $completed_courses += absint($student['completed_count']);
@@ -987,11 +996,23 @@ function sdd_get_overview_insights($students) {
         'enrolled_six_months' => $enrolled_six_months,
         'completed_courses' => $completed_courses,
         'students_with_completion' => $students_with_completion,
+        'enrollment_trend' => $enrollment_trend,
         'progress_distribution' => $progress_distribution,
         'levels' => array_slice($levels, 0, 5, true),
         'theologies' => array_slice($theologies, 0, 5, true),
         'churches' => array_slice($churches, 0, 5, true),
     ];
+}
+
+function sdd_get_recent_month_buckets($months, $now) {
+    $buckets = [];
+
+    for ($i = $months - 1; $i >= 0; $i--) {
+        $timestamp = strtotime('-' . $i . ' months', $now);
+        $buckets[date_i18n('M/y', $timestamp)] = 0;
+    }
+
+    return $buckets;
 }
 
 function sdd_increment_count(&$counts, $key) {
