@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.14
+ * Version: 1.0.15
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.14');
+define('SDD_VERSION', '1.0.15');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -269,6 +269,15 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                 </select>
             </label>
             <label>
+                <span><?php echo esc_html__('Contato', 'sdd'); ?></span>
+                <select name="contact">
+                    <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
+                    <option value="never"><?php echo esc_html__('Nunca contatado', 'sdd'); ?></option>
+                    <option value="recent"><?php echo esc_html__('Contatado 7 dias', 'sdd'); ?></option>
+                    <option value="due"><?php echo esc_html__('Sem contato 30+ dias', 'sdd'); ?></option>
+                </select>
+            </label>
+            <label>
                 <span><?php echo esc_html__('Curso', 'sdd'); ?></span>
                 <select name="course_id">
                     <option value=""><?php echo esc_html__('Todos os cursos', 'sdd'); ?></option>
@@ -369,6 +378,7 @@ function sdd_sanitize_dashboard_filters($input) {
         'search' => isset($input['search']) ? sanitize_text_field(wp_unslash($input['search'])) : '',
         'status' => isset($input['status']) ? sanitize_text_field(wp_unslash($input['status'])) : '',
         'activity' => isset($input['activity']) ? absint($input['activity']) : 0,
+        'contact' => isset($input['contact']) ? sanitize_key(wp_unslash($input['contact'])) : '',
         'course_id' => isset($input['course_id']) ? absint($input['course_id']) : 0,
         'signal' => isset($input['signal']) ? sanitize_key(wp_unslash($input['signal'])) : '',
         'progress_range' => isset($input['progress_range']) ? sanitize_key(wp_unslash($input['progress_range'])) : '',
@@ -672,6 +682,10 @@ function sdd_student_matches_filters($student, $filters) {
         }
     }
 
+    if ($filters['contact'] && !sdd_student_matches_contact_filter($student, $filters['contact'])) {
+        return false;
+    }
+
     if ($filters['signal'] && !sdd_student_matches_signal_filter($student, $filters['signal'])) {
         return false;
     }
@@ -709,6 +723,21 @@ function sdd_student_matches_filters($student, $filters) {
     }
 
     return true;
+}
+
+function sdd_student_matches_contact_filter($student, $contact) {
+    $last_contacted = absint($student['last_contacted_at'] ?? 0);
+
+    switch ($contact) {
+        case 'never':
+            return 0 === $last_contacted;
+        case 'recent':
+            return $last_contacted >= time() - (7 * DAY_IN_SECONDS);
+        case 'due':
+            return 0 === $last_contacted || $last_contacted < time() - (30 * DAY_IN_SECONDS);
+        default:
+            return true;
+    }
 }
 
 function sdd_student_matches_signal_filter($student, $signal) {
@@ -835,6 +864,7 @@ function sdd_render_filter_summary($filters, $result_count) {
         'search' => 'Busca',
         'status' => 'Status',
         'activity' => 'Atividade',
+        'contact' => 'Contato',
         'course_id' => 'Curso',
         'signal' => 'Acompanhamento',
         'progress_range' => 'Progresso',
@@ -854,6 +884,13 @@ function sdd_render_filter_summary($filters, $result_count) {
             $value = $course ? $course->post_title : $value;
         } elseif ('activity' === $key) {
             $value = 'Inativo há ' . absint($value) . '+ dias';
+        } elseif ('contact' === $key) {
+            $contact_labels = [
+                'never' => 'Nunca contatado',
+                'recent' => 'Contatado 7 dias',
+                'due' => 'Sem contato 30+ dias',
+            ];
+            $value = $contact_labels[$value] ?? $value;
         } elseif ('signal' === $key) {
             $signal_labels = [
                 'needs_attention' => 'Precisa atenção',
