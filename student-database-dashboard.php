@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.8
+ * Version: 1.0.9
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.8');
+define('SDD_VERSION', '1.0.9');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -712,6 +712,7 @@ function sdd_get_overview_data($filters) {
             'needs_followup' => $needs_followup,
             'average_progress' => $total ? round($progress_sum / $total) : 0,
             'course_bottlenecks' => sdd_get_course_summaries($students),
+            'insights' => sdd_get_overview_insights($students),
         ]),
     ];
 }
@@ -901,6 +902,16 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Progresso médio', $metrics['average_progress'] . '%', 'entre alunos listados'); ?>
         <?php sdd_metric_card('Inativos 30+ dias', $metrics['inactive_30'], 'precisam de atenção'); ?>
         <?php sdd_metric_card('Follow-up', $metrics['needs_followup'], 'baixo progresso/parado'); ?>
+        <?php sdd_metric_card('Novos este ano', $metrics['insights']['enrolled_year'], 'por data de matrícula'); ?>
+        <?php sdd_metric_card('Novos 6 meses', $metrics['insights']['enrolled_six_months'], 'matrículas recentes'); ?>
+        <?php sdd_metric_card('Cursos concluídos', $metrics['insights']['completed_courses'], 'em todos os alunos filtrados'); ?>
+        <?php sdd_metric_card('Com conclusão', $metrics['insights']['students_with_completion'], 'alunos com 1+ curso concluído'); ?>
+    </div>
+    <div class="sdd-visual-grid">
+        <?php sdd_render_distribution_panel('Distribuição de progresso', 'Onde os alunos estão no caminho acadêmico', $metrics['insights']['progress_distribution']); ?>
+        <?php sdd_render_distribution_panel('Níveis', 'Básico, Intermediário e Avançado', $metrics['insights']['levels']); ?>
+        <?php sdd_render_distribution_panel('Teologia', 'Perfil declarado pelos alunos', $metrics['insights']['theologies']); ?>
+        <?php sdd_render_distribution_panel('Igrejas com mais alunos', 'Top 5 no filtro atual', $metrics['insights']['churches']); ?>
     </div>
     <div class="sdd-overview-grid">
         <?php sdd_render_overview_panel('Precisam de acompanhamento', 'Sinais calculados pelo sistema', $followup_students, 'student'); ?>
@@ -912,6 +923,112 @@ function sdd_render_overview($students, $metrics) {
     <?php echo sdd_render_person_view(array_slice($followup_students ?: $students, 0, 12), 'Alunos para acompanhar'); ?>
     <?php
     return ob_get_clean();
+}
+
+function sdd_get_overview_insights($students) {
+    $now = current_time('timestamp');
+    $year_start = strtotime(date('Y-01-01 00:00:00', $now));
+    $six_months_ago = strtotime('-6 months', $now);
+    $enrolled_year = 0;
+    $enrolled_six_months = 0;
+    $completed_courses = 0;
+    $students_with_completion = 0;
+    $progress_distribution = [
+        '0%' => 0,
+        '1-34%' => 0,
+        '35-84%' => 0,
+        '85-99%' => 0,
+        '100%' => 0,
+    ];
+    $levels = [];
+    $theologies = [];
+    $churches = [];
+
+    foreach ($students as $student) {
+        $enrolled_at = $student['first_enrolled_at'] ? strtotime($student['first_enrolled_at']) : 0;
+
+        if ($enrolled_at >= $year_start) {
+            $enrolled_year++;
+        }
+
+        if ($enrolled_at >= $six_months_ago) {
+            $enrolled_six_months++;
+        }
+
+        $completed_courses += absint($student['completed_count']);
+        if ($student['completed_count'] > 0) {
+            $students_with_completion++;
+        }
+
+        $progress = absint($student['average_progress']);
+        if (0 === $progress) {
+            $progress_distribution['0%']++;
+        } elseif ($progress < 35) {
+            $progress_distribution['1-34%']++;
+        } elseif ($progress < 85) {
+            $progress_distribution['35-84%']++;
+        } elseif ($progress < 100) {
+            $progress_distribution['85-99%']++;
+        } else {
+            $progress_distribution['100%']++;
+        }
+
+        sdd_increment_count($levels, $student['level'] ?: 'Não informado');
+        sdd_increment_count($theologies, $student['theology'] ?: 'Não informado');
+        sdd_increment_count($churches, $student['church'] ?: 'Não informado');
+    }
+
+    arsort($levels);
+    arsort($theologies);
+    arsort($churches);
+
+    return [
+        'enrolled_year' => $enrolled_year,
+        'enrolled_six_months' => $enrolled_six_months,
+        'completed_courses' => $completed_courses,
+        'students_with_completion' => $students_with_completion,
+        'progress_distribution' => $progress_distribution,
+        'levels' => array_slice($levels, 0, 5, true),
+        'theologies' => array_slice($theologies, 0, 5, true),
+        'churches' => array_slice($churches, 0, 5, true),
+    ];
+}
+
+function sdd_increment_count(&$counts, $key) {
+    $key = trim((string) $key) ?: 'Não informado';
+    if (!isset($counts[$key])) {
+        $counts[$key] = 0;
+    }
+
+    $counts[$key]++;
+}
+
+function sdd_render_distribution_panel($title, $hint, $items) {
+    $max = $items ? max($items) : 0;
+    ?>
+    <section class="sdd-visual-panel">
+        <header>
+            <h3><?php echo esc_html($title); ?></h3>
+            <span><?php echo esc_html($hint); ?></span>
+        </header>
+        <?php if (!$items || 0 === $max) : ?>
+            <p class="sdd-empty sdd-empty--inline"><?php echo esc_html__('Sem dados suficientes.', 'sdd'); ?></p>
+        <?php else : ?>
+            <div class="sdd-bars">
+                <?php foreach ($items as $label => $count) : ?>
+                    <?php $width = $max > 0 ? max(4, round(($count / $max) * 100)) : 0; ?>
+                    <div class="sdd-bar-row">
+                        <div>
+                            <strong><?php echo esc_html($label); ?></strong>
+                            <span><?php echo esc_html($count); ?></span>
+                        </div>
+                        <em><i style="width:<?php echo esc_attr($width); ?>%"></i></em>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+    <?php
 }
 
 function sdd_render_overview_panel($title, $hint, $items, $type) {

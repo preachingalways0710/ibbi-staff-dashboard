@@ -213,6 +213,82 @@
   margin: 8px 0 4px;
 }
 
+.sdd-visual-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 22px;
+}
+
+.sdd-visual-panel {
+  background: #fff;
+  border: 1px solid var(--sdd-border);
+  padding: 14px;
+}
+
+.sdd-visual-panel header {
+  border-bottom: 1px solid #e9edf2;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+
+.sdd-visual-panel h3 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.sdd-visual-panel header span {
+  color: var(--sdd-muted);
+  display: block;
+  font-size: 12px;
+}
+
+.sdd-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.sdd-bar-row {
+  display: grid;
+  gap: 6px;
+}
+
+.sdd-bar-row div {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.sdd-bar-row strong,
+.sdd-bar-row span {
+  display: block;
+}
+
+.sdd-bar-row strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.sdd-bar-row span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sdd-bar-row em {
+  background: #e9edf2;
+  display: block;
+  height: 9px;
+  overflow: hidden;
+}
+
+.sdd-bar-row i {
+  background: var(--sdd-accent-2);
+  display: block;
+  height: 100%;
+}
+
 .sdd-overview-grid {
   display: grid;
   gap: 14px;
@@ -576,6 +652,7 @@
 
   .sdd-filters,
   .sdd-metrics,
+  .sdd-visual-grid,
   .sdd-overview-grid {
     grid-template-columns: 1fr;
   }
