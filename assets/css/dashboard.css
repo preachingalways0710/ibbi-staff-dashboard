@@ -124,6 +124,68 @@
   width: 100%;
 }
 
+.sdd-filter-actions {
+  align-items: end;
+  display: flex;
+  min-height: 42px;
+}
+
+.sdd-clear-filters {
+  background: #fff;
+  border: 1px solid var(--sdd-accent-2);
+  border-radius: 0;
+  color: var(--sdd-accent-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.sdd-clear-filters:hover,
+.sdd-clear-filters:focus {
+  background: #eef7f4;
+}
+
+.sdd-filter-summary {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--sdd-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+}
+
+.sdd-filter-summary strong {
+  font-size: 13px;
+}
+
+.sdd-filter-summary > span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+}
+
+.sdd-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sdd-filter-chips span {
+  background: #eef7f4;
+  border: 1px solid #b8d7cf;
+  color: #214f4b;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 7px;
+}
+
 .sdd-metrics {
   display: grid;
   gap: 12px;

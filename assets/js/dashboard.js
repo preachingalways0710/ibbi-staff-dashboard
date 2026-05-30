@@ -4,6 +4,7 @@
   dashboards.forEach((dashboard) => {
     const tabs = Array.from(dashboard.querySelectorAll('[data-sdd-view]'));
     const filters = dashboard.querySelector('[data-sdd-filters]');
+    const clearFilters = dashboard.querySelector('[data-sdd-clear-filters]');
     const results = dashboard.querySelector('[data-sdd-results]');
     let activeView = 'overview';
     let debounceTimer = null;
@@ -80,6 +81,13 @@
 
     filters.addEventListener('input', debounceLoad);
     filters.addEventListener('change', loadDashboard);
+
+    if (clearFilters) {
+      clearFilters.addEventListener('click', () => {
+        filters.reset();
+        loadDashboard();
+      });
+    }
 
     loadDashboard();
   });

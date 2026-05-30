@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.5');
+define('SDD_VERSION', '1.0.6');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -235,6 +235,9 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                     <?php endforeach; ?>
                 </select>
             </label>
+            <div class="sdd-filter-actions">
+                <button class="sdd-clear-filters" type="button" data-sdd-clear-filters><?php echo esc_html__('Limpar filtros', 'sdd'); ?></button>
+            </div>
         </form>
 
         <div class="sdd-results" data-sdd-results aria-live="polite">
@@ -613,7 +616,7 @@ function sdd_get_overview_data($filters) {
     }
 
     return [
-        'html' => sdd_render_overview($students, [
+        'html' => sdd_render_filter_summary($filters, $total) . sdd_render_overview($students, [
             'total' => $total,
             'inactive_30' => $inactive_30,
             'needs_followup' => $needs_followup,
@@ -624,15 +627,79 @@ function sdd_get_overview_data($filters) {
 }
 
 function sdd_get_person_view_data($filters) {
+    $students = sdd_get_filtered_students($filters);
+
     return [
-        'html' => sdd_render_person_view(sdd_get_filtered_students($filters)),
+        'html' => sdd_render_filter_summary($filters, count($students)) . sdd_render_person_view($students),
     ];
 }
 
 function sdd_get_course_view_data($filters) {
+    $students = sdd_get_filtered_students($filters);
+    $courses = sdd_get_course_summaries($students);
+
     return [
-        'html' => sdd_render_course_view(sdd_get_course_summaries(sdd_get_filtered_students($filters))),
+        'html' => sdd_render_filter_summary($filters, count($students)) . sdd_render_course_view($courses),
     ];
+}
+
+function sdd_render_filter_summary($filters, $result_count) {
+    $active = [];
+    $labels = [
+        'search' => 'Busca',
+        'status' => 'Status',
+        'activity' => 'Atividade',
+        'course_id' => 'Curso',
+        'signal' => 'Acompanhamento',
+        'level' => 'Nível',
+        'theology' => 'Teologia',
+        'church' => 'Igreja',
+        'supervisor' => 'Supervisor',
+    ];
+
+    foreach ($filters as $key => $value) {
+        if ('' === $value || 0 === $value || null === $value) {
+            continue;
+        }
+
+        if ('course_id' === $key) {
+            $course = get_post(absint($value));
+            $value = $course ? $course->post_title : $value;
+        } elseif ('activity' === $key) {
+            $value = 'Inativo há ' . absint($value) . '+ dias';
+        } elseif ('signal' === $key) {
+            $signal_labels = [
+                'needs_attention' => 'Precisa atenção',
+                'inactive' => 'Inativo',
+                'no_progress' => 'Sem progresso',
+                'low_progress' => 'Progresso baixo',
+                'near_complete' => 'Perto de concluir',
+            ];
+            $value = $signal_labels[$value] ?? $value;
+        }
+
+        $active[] = [
+            'label' => $labels[$key] ?? $key,
+            'value' => $value,
+        ];
+    }
+
+    ob_start();
+    ?>
+    <div class="sdd-filter-summary">
+        <strong><?php echo esc_html(sprintf(_n('%d aluno encontrado', '%d alunos encontrados', $result_count, 'sdd'), $result_count)); ?></strong>
+        <?php if ($active) : ?>
+            <div class="sdd-filter-chips">
+                <?php foreach ($active as $filter) : ?>
+                    <span><?php echo esc_html($filter['label'] . ': ' . $filter['value']); ?></span>
+                <?php endforeach; ?>
+            </div>
+        <?php else : ?>
+            <span><?php echo esc_html__('Sem filtros ativos', 'sdd'); ?></span>
+        <?php endif; ?>
+    </div>
+    <?php
+    return ob_get_clean();
 }
 
 function sdd_get_course_summaries($students) {
