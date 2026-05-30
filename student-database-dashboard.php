@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Student Database Dashboard
+ * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
  * Version: 1.0.0
  * Author: Mike Schmidt / OpenAI

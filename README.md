@@ -1,4 +1,4 @@
-# Student Database Dashboard
+# IBBI Staff Dashboard
 
 Staff-facing WordPress plugin for the Bible Institute dashboard.
 
