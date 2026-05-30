@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.3');
+define('SDD_VERSION', '1.0.4');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -186,6 +186,36 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                     <?php endforeach; ?>
                 </select>
             </label>
+            <label>
+                <span><?php echo esc_html__('Acompanhamento', 'sdd'); ?></span>
+                <select name="signal">
+                    <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
+                    <option value="needs_attention"><?php echo esc_html__('Precisa atenção', 'sdd'); ?></option>
+                    <option value="inactive"><?php echo esc_html__('Inativo', 'sdd'); ?></option>
+                    <option value="no_progress"><?php echo esc_html__('Sem progresso', 'sdd'); ?></option>
+                    <option value="low_progress"><?php echo esc_html__('Progresso baixo', 'sdd'); ?></option>
+                    <option value="near_complete"><?php echo esc_html__('Perto de concluir', 'sdd'); ?></option>
+                </select>
+            </label>
+            <label>
+                <span><?php echo esc_html__('Nível', 'sdd'); ?></span>
+                <select name="level">
+                    <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
+                    <option value="Básico"><?php echo esc_html__('Básico', 'sdd'); ?></option>
+                    <option value="Intermediário"><?php echo esc_html__('Intermediário', 'sdd'); ?></option>
+                    <option value="Avançado"><?php echo esc_html__('Avançado', 'sdd'); ?></option>
+                </select>
+            </label>
+            <label>
+                <span><?php echo esc_html__('Teologia', 'sdd'); ?></span>
+                <select name="theology">
+                    <option value=""><?php echo esc_html__('Todas', 'sdd'); ?></option>
+                    <option value="Biblicista"><?php echo esc_html__('Biblicista', 'sdd'); ?></option>
+                    <option value="Calvinista"><?php echo esc_html__('Calvinista', 'sdd'); ?></option>
+                    <option value="Arminiana"><?php echo esc_html__('Arminiana', 'sdd'); ?></option>
+                    <option value="Outra"><?php echo esc_html__('Outra', 'sdd'); ?></option>
+                </select>
+            </label>
         </form>
 
         <div class="sdd-results" data-sdd-results aria-live="polite">
@@ -216,6 +246,9 @@ function sdd_sanitize_dashboard_filters($input) {
         'status' => isset($input['status']) ? sanitize_text_field(wp_unslash($input['status'])) : '',
         'activity' => isset($input['activity']) ? absint($input['activity']) : 0,
         'course_id' => isset($input['course_id']) ? absint($input['course_id']) : 0,
+        'signal' => isset($input['signal']) ? sanitize_key(wp_unslash($input['signal'])) : '',
+        'level' => isset($input['level']) ? sanitize_text_field(wp_unslash($input['level'])) : '',
+        'theology' => isset($input['theology']) ? sanitize_text_field(wp_unslash($input['theology'])) : '',
     ];
 }
 
@@ -418,6 +451,14 @@ function sdd_student_matches_filters($student, $filters) {
         return false;
     }
 
+    if ($filters['level'] && 0 !== strcasecmp($student['level'], $filters['level'])) {
+        return false;
+    }
+
+    if ($filters['theology'] && 0 !== strcasecmp($student['theology'], $filters['theology'])) {
+        return false;
+    }
+
     if ($filters['activity']) {
         if (!$student['last_activity']) {
             return true;
@@ -427,6 +468,10 @@ function sdd_student_matches_filters($student, $filters) {
         if ($student['last_activity'] > $cutoff) {
             return false;
         }
+    }
+
+    if ($filters['signal'] && !sdd_student_matches_signal_filter($student, $filters['signal'])) {
+        return false;
     }
 
     if ($filters['course_id']) {
@@ -458,6 +503,23 @@ function sdd_student_matches_filters($student, $filters) {
     }
 
     return true;
+}
+
+function sdd_student_matches_signal_filter($student, $signal) {
+    switch ($signal) {
+        case 'needs_attention':
+            return !empty($student['signals']);
+        case 'inactive':
+            return !$student['last_activity'] || $student['last_activity'] < time() - (30 * DAY_IN_SECONDS);
+        case 'no_progress':
+            return $student['course_count'] > 0 && 0 === absint($student['average_progress']);
+        case 'low_progress':
+            return $student['course_count'] > 0 && $student['average_progress'] > 0 && $student['average_progress'] < 35;
+        case 'near_complete':
+            return $student['course_count'] > 0 && $student['average_progress'] >= 85 && $student['completed_count'] < $student['course_count'];
+        default:
+            return true;
+    }
 }
 
 function sdd_get_filtered_students($filters) {

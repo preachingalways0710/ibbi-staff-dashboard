@@ -96,6 +96,10 @@
   padding: 14px;
 }
 
+.sdd-filters label:first-child {
+  grid-column: span 2;
+}
+
 .sdd-filters label {
   display: grid;
   gap: 5px;
@@ -512,6 +516,10 @@
   .sdd-metrics,
   .sdd-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sdd-filters label:first-child {
+    grid-column: auto;
   }
 
   .sdd-student-detail,
