@@ -555,6 +555,78 @@
   margin: 0;
 }
 
+.sdd-staff-form {
+  background: #fff;
+  border: 1px solid var(--sdd-border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.sdd-staff-form h4 {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+}
+
+.sdd-staff-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.sdd-staff-form label span {
+  color: var(--sdd-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sdd-staff-form input,
+.sdd-staff-form select,
+.sdd-staff-form textarea {
+  border: 1px solid #bfc8d4;
+  border-radius: 0;
+  color: var(--sdd-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px;
+  width: 100%;
+}
+
+.sdd-staff-form__notes,
+.sdd-staff-form__actions {
+  grid-column: 1 / -1;
+}
+
+.sdd-staff-form__actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.sdd-staff-form__actions button {
+  background: var(--sdd-accent-2);
+  border: 1px solid var(--sdd-accent-2);
+  border-radius: 0;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.sdd-staff-form__actions button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.sdd-staff-form__actions span {
+  color: var(--sdd-muted);
+  font-size: 12px;
+}
+
 .sdd-course-detail {
   display: grid;
   gap: 16px;
@@ -683,6 +755,7 @@
 
   .sdd-student-detail,
   .sdd-detail-list,
+  .sdd-staff-form,
   .sdd-course-stat-grid {
     grid-template-columns: 1fr;
   }

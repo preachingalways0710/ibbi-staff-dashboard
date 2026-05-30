@@ -63,6 +63,55 @@
       toggle.closest('tr')?.classList.toggle('is-expanded', isOpening);
     });
 
+    results.addEventListener('submit', (event) => {
+      const form = event.target.closest('[data-sdd-staff-form]');
+
+      if (!form) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const status = form.querySelector('[data-sdd-save-status]');
+      const button = form.querySelector('button[type="submit"]');
+      const data = new FormData(form);
+      data.append('action', 'sdd_save_student_meta');
+      data.append('nonce', sddDashboard.nonce);
+
+      if (status) {
+        status.textContent = 'Salvando...';
+      }
+      if (button) {
+        button.disabled = true;
+      }
+
+      fetch(sddDashboard.ajaxUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: data
+      })
+        .then((response) => response.json())
+        .then((payload) => {
+          if (!payload || !payload.success) {
+            throw new Error('Save failed');
+          }
+          if (status) {
+            status.textContent = 'Salvo';
+          }
+          window.setTimeout(loadDashboard, 650);
+        })
+        .catch(() => {
+          if (status) {
+            status.textContent = 'Erro ao salvar';
+          }
+        })
+        .finally(() => {
+          if (button) {
+            button.disabled = false;
+          }
+        });
+    });
+
     const debounceLoad = () => {
       window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(loadDashboard, 250);

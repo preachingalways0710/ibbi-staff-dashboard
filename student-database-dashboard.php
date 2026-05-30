@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.11
+ * Version: 1.0.12
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.11');
+define('SDD_VERSION', '1.0.12');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -141,6 +141,29 @@ function sdd_ajax_export_students() {
 
     fclose($output);
     exit;
+}
+
+add_action('wp_ajax_sdd_save_student_meta', 'sdd_ajax_save_student_meta');
+function sdd_ajax_save_student_meta() {
+    check_ajax_referer('sdd_dashboard', 'nonce');
+
+    if (!sdd_current_user_can_view_dashboard()) {
+        wp_send_json_error(['message' => __('Você não tem permissão para editar estes dados.', 'sdd')], 403);
+    }
+
+    $student_id = isset($_POST['student_id']) ? absint($_POST['student_id']) : 0;
+    if (!$student_id || !get_user_by('id', $student_id)) {
+        wp_send_json_error(['message' => __('Aluno inválido.', 'sdd')], 400);
+    }
+
+    update_user_meta($student_id, '_bi_student_status', sanitize_text_field(wp_unslash($_POST['student_status'] ?? '')));
+    update_user_meta($student_id, '_bi_level', sanitize_text_field(wp_unslash($_POST['level'] ?? '')));
+    update_user_meta($student_id, '_bi_payment_status', sanitize_text_field(wp_unslash($_POST['payment'] ?? '')));
+    update_user_meta($student_id, '_bi_supervisor', sanitize_text_field(wp_unslash($_POST['supervisor'] ?? '')));
+    update_user_meta($student_id, '_bi_covalidation_status', sanitize_text_field(wp_unslash($_POST['co_validation'] ?? '')));
+    update_user_meta($student_id, '_bi_admin_notes', sanitize_textarea_field(wp_unslash($_POST['admin_notes'] ?? '')));
+
+    wp_send_json_success(['message' => __('Dados salvos.', 'sdd')]);
 }
 
 function sdd_render_staff_dashboard_shortcode($atts = []) {
@@ -1218,6 +1241,47 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                                 <p><?php echo nl2br(esc_html($student['admin_notes'])); ?></p>
                                             </div>
                                         <?php endif; ?>
+                                        <form class="sdd-staff-form" data-sdd-staff-form>
+                                            <input type="hidden" name="student_id" value="<?php echo esc_attr($student['id']); ?>">
+                                            <h4><?php echo esc_html__('Atualizar acompanhamento', 'sdd'); ?></h4>
+                                            <label>
+                                                <span><?php echo esc_html__('Status', 'sdd'); ?></span>
+                                                <select name="student_status">
+                                                    <?php foreach (['Ativo', 'Parado', 'Trancado', 'Cancelado', 'Concluído'] as $status_option) : ?>
+                                                        <option value="<?php echo esc_attr($status_option); ?>" <?php selected($student['status'], $status_option); ?>><?php echo esc_html($status_option); ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </label>
+                                            <label>
+                                                <span><?php echo esc_html__('Nível', 'sdd'); ?></span>
+                                                <select name="level">
+                                                    <option value=""><?php echo esc_html__('Não informado', 'sdd'); ?></option>
+                                                    <?php foreach (['Básico', 'Intermediário', 'Avançado'] as $level_option) : ?>
+                                                        <option value="<?php echo esc_attr($level_option); ?>" <?php selected($student['level'], $level_option); ?>><?php echo esc_html($level_option); ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </label>
+                                            <label>
+                                                <span><?php echo esc_html__('Pagamento', 'sdd'); ?></span>
+                                                <input type="text" name="payment" value="<?php echo esc_attr($student['payment']); ?>">
+                                            </label>
+                                            <label>
+                                                <span><?php echo esc_html__('Supervisor', 'sdd'); ?></span>
+                                                <input type="text" name="supervisor" value="<?php echo esc_attr($student['supervisor']); ?>">
+                                            </label>
+                                            <label>
+                                                <span><?php echo esc_html__('Co-validação', 'sdd'); ?></span>
+                                                <input type="text" name="co_validation" value="<?php echo esc_attr($student['co_validation']); ?>">
+                                            </label>
+                                            <label class="sdd-staff-form__notes">
+                                                <span><?php echo esc_html__('Últimas notícias / notas', 'sdd'); ?></span>
+                                                <textarea name="admin_notes" rows="4"><?php echo esc_textarea($student['admin_notes']); ?></textarea>
+                                            </label>
+                                            <div class="sdd-staff-form__actions">
+                                                <button type="submit"><?php echo esc_html__('Salvar acompanhamento', 'sdd'); ?></button>
+                                                <span data-sdd-save-status></span>
+                                            </div>
+                                        </form>
                                     </section>
                                     <section>
                                         <h4><?php echo esc_html__('Progresso nas matérias', 'sdd'); ?></h4>
