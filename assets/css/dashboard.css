@@ -197,17 +197,22 @@
 }
 
 .sdd-detail-toggle {
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid currentColor;
-  color: var(--sdd-accent);
+  background: var(--sdd-accent-2);
+  border: 1px solid var(--sdd-accent-2);
+  color: #fff;
   cursor: pointer;
   display: inline-block;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   margin-top: 10px;
-  padding: 0;
+  padding: 5px 8px;
+}
+
+.sdd-detail-toggle:hover,
+.sdd-detail-toggle:focus {
+  background: #1c4845;
+  border-color: #1c4845;
 }
 
 .sdd-pill {
