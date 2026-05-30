@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.7
+ * Version: 1.0.8
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.7');
+define('SDD_VERSION', '1.0.8');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -199,6 +199,17 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                 </select>
             </label>
             <label>
+                <span><?php echo esc_html__('Progresso', 'sdd'); ?></span>
+                <select name="progress_range">
+                    <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
+                    <option value="zero"><?php echo esc_html__('0%', 'sdd'); ?></option>
+                    <option value="low"><?php echo esc_html__('1-34%', 'sdd'); ?></option>
+                    <option value="mid"><?php echo esc_html__('35-84%', 'sdd'); ?></option>
+                    <option value="near"><?php echo esc_html__('85-99%', 'sdd'); ?></option>
+                    <option value="complete"><?php echo esc_html__('100%', 'sdd'); ?></option>
+                </select>
+            </label>
+            <label>
                 <span><?php echo esc_html__('Nível', 'sdd'); ?></span>
                 <select name="level">
                     <option value=""><?php echo esc_html__('Todos', 'sdd'); ?></option>
@@ -269,6 +280,7 @@ function sdd_sanitize_dashboard_filters($input) {
         'activity' => isset($input['activity']) ? absint($input['activity']) : 0,
         'course_id' => isset($input['course_id']) ? absint($input['course_id']) : 0,
         'signal' => isset($input['signal']) ? sanitize_key(wp_unslash($input['signal'])) : '',
+        'progress_range' => isset($input['progress_range']) ? sanitize_key(wp_unslash($input['progress_range'])) : '',
         'level' => isset($input['level']) ? sanitize_text_field(wp_unslash($input['level'])) : '',
         'theology' => isset($input['theology']) ? sanitize_text_field(wp_unslash($input['theology'])) : '',
         'church' => isset($input['church']) ? sanitize_text_field(wp_unslash($input['church'])) : '',
@@ -569,6 +581,10 @@ function sdd_student_matches_filters($student, $filters) {
         return false;
     }
 
+    if ($filters['progress_range'] && !sdd_student_matches_progress_range($student, $filters['progress_range'])) {
+        return false;
+    }
+
     if ($filters['course_id']) {
         $course_ids = wp_list_pluck($student['courses'], 'id');
         if (!in_array($filters['course_id'], $course_ids, true)) {
@@ -612,6 +628,25 @@ function sdd_student_matches_signal_filter($student, $signal) {
             return $student['course_count'] > 0 && $student['average_progress'] > 0 && $student['average_progress'] < 35;
         case 'near_complete':
             return $student['course_count'] > 0 && $student['average_progress'] >= 85 && $student['completed_count'] < $student['course_count'];
+        default:
+            return true;
+    }
+}
+
+function sdd_student_matches_progress_range($student, $range) {
+    $progress = absint($student['average_progress']);
+
+    switch ($range) {
+        case 'zero':
+            return 0 === $progress;
+        case 'low':
+            return $progress >= 1 && $progress <= 34;
+        case 'mid':
+            return $progress >= 35 && $progress <= 84;
+        case 'near':
+            return $progress >= 85 && $progress <= 99;
+        case 'complete':
+            return 100 === $progress;
         default:
             return true;
     }
@@ -706,6 +741,7 @@ function sdd_render_filter_summary($filters, $result_count) {
         'activity' => 'Atividade',
         'course_id' => 'Curso',
         'signal' => 'Acompanhamento',
+        'progress_range' => 'Progresso',
         'level' => 'Nível',
         'theology' => 'Teologia',
         'church' => 'Igreja',
@@ -731,6 +767,15 @@ function sdd_render_filter_summary($filters, $result_count) {
                 'near_complete' => 'Perto de concluir',
             ];
             $value = $signal_labels[$value] ?? $value;
+        } elseif ('progress_range' === $key) {
+            $progress_labels = [
+                'zero' => '0%',
+                'low' => '1-34%',
+                'mid' => '35-84%',
+                'near' => '85-99%',
+                'complete' => '100%',
+            ];
+            $value = $progress_labels[$value] ?? $value;
         }
 
         $active[] = [
