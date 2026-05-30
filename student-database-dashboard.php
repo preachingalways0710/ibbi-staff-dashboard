@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.6');
+define('SDD_VERSION', '1.0.7');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -464,8 +464,42 @@ function sdd_get_student_summary($user) {
     ];
 
     $student['signals'] = sdd_get_student_signals($student);
+    $student['attention_score'] = sdd_get_student_attention_score($student);
 
     return $student;
+}
+
+function sdd_get_student_attention_score($student) {
+    $score = 0;
+
+    if (!$student['last_activity']) {
+        $score += 35;
+    } else {
+        $inactive_days = floor((time() - $student['last_activity']) / DAY_IN_SECONDS);
+        if ($inactive_days >= 60) {
+            $score += 35;
+        } elseif ($inactive_days >= 30) {
+            $score += 25;
+        } elseif ($inactive_days >= 14) {
+            $score += 12;
+        }
+    }
+
+    if ($student['course_count'] > 0 && 0 === absint($student['average_progress'])) {
+        $score += 30;
+    } elseif ($student['course_count'] > 0 && $student['average_progress'] < 35) {
+        $score += 20;
+    } elseif ($student['course_count'] > 0 && $student['average_progress'] >= 85 && $student['completed_count'] < $student['course_count']) {
+        $score += 8;
+    }
+
+    if (0 === strcasecmp($student['status'], 'Parado')) {
+        $score += 25;
+    } elseif (0 === strcasecmp($student['status'], 'Trancado')) {
+        $score += 15;
+    }
+
+    return $score;
 }
 
 function sdd_get_student_signals($student) {
@@ -593,7 +627,28 @@ function sdd_get_filtered_students($filters) {
         }
     }
 
+    usort($students, 'sdd_sort_students_by_attention');
+
     return $students;
+}
+
+function sdd_sort_students_by_attention($a, $b) {
+    if ($a['attention_score'] !== $b['attention_score']) {
+        return $b['attention_score'] <=> $a['attention_score'];
+    }
+
+    if ($a['average_progress'] !== $b['average_progress']) {
+        return $a['average_progress'] <=> $b['average_progress'];
+    }
+
+    $a_activity = $a['last_activity'] ?: 0;
+    $b_activity = $b['last_activity'] ?: 0;
+
+    if ($a_activity !== $b_activity) {
+        return $a_activity <=> $b_activity;
+    }
+
+    return strcasecmp($a['name'], $b['name']);
 }
 
 function sdd_get_overview_data($filters) {
@@ -927,6 +982,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Pagamento', 'sdd'); ?></dt><dd><?php echo esc_html($student['payment'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Supervisor', 'sdd'); ?></dt><dd><?php echo esc_html($student['supervisor'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
                                         </dl>
                                         <?php if ($student['admin_notes']) : ?>
                                             <div class="sdd-note">
@@ -1033,6 +1089,22 @@ function sdd_render_course_view($courses) {
     </div>
     <?php
     return ob_get_clean();
+}
+
+function sdd_get_attention_label($score) {
+    if ($score >= 60) {
+        return 'Alta';
+    }
+
+    if ($score >= 30) {
+        return 'Média';
+    }
+
+    if ($score > 0) {
+        return 'Baixa';
+    }
+
+    return 'Normal';
 }
 
 function sdd_small_stat($label, $value) {
