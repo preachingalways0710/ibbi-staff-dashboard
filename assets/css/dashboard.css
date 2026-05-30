@@ -154,6 +154,7 @@
 .sdd-table {
   border-collapse: collapse;
   font-size: 14px;
+  line-height: 1.45;
   min-width: 840px;
   width: 100%;
 }
@@ -161,7 +162,7 @@
 .sdd-table th,
 .sdd-table td {
   border-bottom: 1px solid var(--sdd-border);
-  padding: 12px 10px;
+  padding: 16px 14px;
   text-align: left;
   vertical-align: top;
 }
@@ -182,13 +183,13 @@
 .sdd-table td span {
   color: var(--sdd-muted);
   font-size: 12px;
-  margin-top: 3px;
+  margin-top: 5px;
 }
 
 .sdd-table a {
   color: var(--sdd-accent);
   font-size: 12px;
-  margin-top: 5px;
+  margin-top: 8px;
 }
 
 .sdd-pill {
@@ -227,18 +228,23 @@
 
 .sdd-detail-row td {
   background: #fbfcfd;
-  padding-top: 0;
+  padding: 18px 14px 20px;
 }
 
 .sdd-course-list {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
 .sdd-course-list div {
   border-left: 3px solid var(--sdd-accent-2);
-  padding-left: 8px;
+  padding: 4px 0 4px 12px;
+}
+
+.sdd-course-list strong {
+  line-height: 1.35;
+  margin-bottom: 4px;
 }
 
 .sdd-loading,
