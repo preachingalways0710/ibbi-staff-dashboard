@@ -53,11 +53,27 @@
 }
 
 .sdd-dashboard__status {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sdd-dashboard__status span {
   background: #eef7f4;
   border: 1px solid #b8d7cf;
   color: #214f4b;
+  display: block;
   font-size: 13px;
+  line-height: 1.2;
   padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.sdd-dashboard__status span + span {
+  background: #f4f6f8;
+  border-color: #d7dee8;
+  color: #4b5563;
 }
 
 .sdd-tabs {
