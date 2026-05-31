@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.19
+ * Version: 1.0.20
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.19');
+define('SDD_VERSION', '1.0.20');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -584,9 +584,32 @@ function sdd_get_student_summary($user) {
     ];
 
     $student['signals'] = sdd_get_student_signals($student);
+    $student['missing_fields'] = sdd_get_student_missing_fields($student);
     $student['attention_score'] = sdd_get_student_attention_score($student);
 
     return $student;
+}
+
+function sdd_get_student_missing_fields($student) {
+    $fields = [
+        'level' => 'Nível',
+        'theology' => 'Teologia',
+        'church' => 'Igreja',
+        'pastor' => 'Pastor',
+        'whatsapp' => 'WhatsApp',
+        'city' => 'Cidade',
+        'state' => 'Estado',
+        'first_enrolled_at' => 'Data de matrícula',
+    ];
+    $missing = [];
+
+    foreach ($fields as $key => $label) {
+        if (empty($student[$key])) {
+            $missing[] = $label;
+        }
+    }
+
+    return $missing;
 }
 
 function sdd_get_student_attention_score($student) {
@@ -1039,6 +1062,9 @@ function sdd_render_overview($students, $metrics) {
     $contact_due_students = array_values(array_filter($students, static function ($student) {
         return sdd_is_student_contact_due($student);
     }));
+    $cleanup_students = array_values(array_filter($students, static function ($student) {
+        return !empty($student['missing_fields']);
+    }));
     $course_bottlenecks = array_slice(array_filter($metrics['course_bottlenecks'], static function ($course) {
         return $course['bottleneck_score'] > 0;
     }), 0, 5);
@@ -1058,17 +1084,20 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Sem contato', $metrics['insights']['never_contacted'], 'nenhum contato registrado'); ?>
         <?php sdd_metric_card('Contato 30+ dias', $metrics['insights']['contact_due_30'], 'precisam retomada'); ?>
         <?php sdd_metric_card('Contato 7 dias', $metrics['insights']['contacted_7'], 'acompanhados recentemente'); ?>
+        <?php sdd_metric_card('Dados incompletos', $metrics['insights']['records_with_missing_data'], 'alunos para revisar'); ?>
     </div>
     <div class="sdd-visual-grid">
         <?php sdd_render_distribution_panel('Matrículas nos últimos 6 meses', 'Novos alunos por mês', $metrics['insights']['enrollment_trend']); ?>
         <?php sdd_render_distribution_panel('Distribuição de progresso', 'Onde os alunos estão no caminho acadêmico', $metrics['insights']['progress_distribution']); ?>
         <?php sdd_render_distribution_panel('Ritmo de contato', 'Frequência de acompanhamento da equipe', $metrics['insights']['contact_cadence']); ?>
+        <?php sdd_render_distribution_panel('Campos faltando', 'Onde a limpeza dos dados deve começar', $metrics['insights']['missing_fields']); ?>
         <?php sdd_render_distribution_panel('Níveis', 'Básico, Intermediário e Avançado', $metrics['insights']['levels']); ?>
         <?php sdd_render_distribution_panel('Teologia', 'Perfil declarado pelos alunos', $metrics['insights']['theologies']); ?>
         <?php sdd_render_distribution_panel('Igrejas com mais alunos', 'Top 5 no filtro atual', $metrics['insights']['churches']); ?>
     </div>
     <div class="sdd-overview-grid">
         <?php sdd_render_overview_panel('Precisam de acompanhamento', 'Sinais calculados pelo sistema', $followup_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Limpeza de dados', 'Alunos com campos acadêmicos ou pessoais incompletos', $cleanup_students, 'cleanup'); ?>
         <?php sdd_render_overview_panel('Parados recentemente', 'Sem atividade nos últimos 30 dias', $inactive_students, 'student'); ?>
         <?php sdd_render_overview_panel('Contato atrasado', 'Nunca contatados ou sem contato há 30+ dias', $contact_due_students, 'contact'); ?>
         <?php sdd_render_overview_panel('Perto de concluir', 'Progresso alto, mas ainda incompleto', $near_completion_students, 'student'); ?>
@@ -1121,6 +1150,7 @@ function sdd_get_overview_insights($students) {
     $never_contacted = 0;
     $contact_due_30 = 0;
     $contacted_7 = 0;
+    $records_with_missing_data = 0;
     $progress_distribution = [
         '0%' => 0,
         '1-34%' => 0,
@@ -1138,6 +1168,7 @@ function sdd_get_overview_insights($students) {
     $levels = [];
     $theologies = [];
     $churches = [];
+    $missing_fields = [];
 
     foreach ($students as $student) {
         $enrolled_at = $student['first_enrolled_at'] ? strtotime($student['first_enrolled_at']) : 0;
@@ -1189,6 +1220,14 @@ function sdd_get_overview_insights($students) {
             $contact_cadence['Últimos 7 dias']++;
         }
 
+        if (!empty($student['missing_fields'])) {
+            $records_with_missing_data++;
+
+            foreach ($student['missing_fields'] as $missing_field) {
+                sdd_increment_count($missing_fields, $missing_field);
+            }
+        }
+
         sdd_increment_count($levels, $student['level'] ?: 'Não informado');
         sdd_increment_count($theologies, $student['theology'] ?: 'Não informado');
         sdd_increment_count($churches, $student['church'] ?: 'Não informado');
@@ -1197,6 +1236,7 @@ function sdd_get_overview_insights($students) {
     arsort($levels);
     arsort($theologies);
     arsort($churches);
+    arsort($missing_fields);
 
     return [
         'enrolled_year' => $enrolled_year,
@@ -1206,9 +1246,11 @@ function sdd_get_overview_insights($students) {
         'never_contacted' => $never_contacted,
         'contact_due_30' => $contact_due_30,
         'contacted_7' => $contacted_7,
+        'records_with_missing_data' => $records_with_missing_data,
         'enrollment_trend' => $enrollment_trend,
         'progress_distribution' => $progress_distribution,
         'contact_cadence' => $contact_cadence,
+        'missing_fields' => array_slice($missing_fields, 0, 8, true),
         'levels' => array_slice($levels, 0, 5, true),
         'theologies' => array_slice($theologies, 0, 5, true),
         'churches' => array_slice($churches, 0, 5, true),
@@ -1286,6 +1328,8 @@ function sdd_render_overview_panel($title, $hint, $items, $type) {
                             <strong><?php echo esc_html($item['name']); ?></strong>
                             <?php if ('contact' === $type) : ?>
                                 <span><?php echo esc_html('Último contato: ' . sdd_get_last_contact_label($item) . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                            <?php elseif ('cleanup' === $type) : ?>
+                                <span><?php echo esc_html('Faltando: ' . implode(', ', array_slice($item['missing_fields'], 0, 4))); ?></span>
                             <?php else : ?>
                                 <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
                             <?php endif; ?>
