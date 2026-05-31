@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.18
+ * Version: 1.0.19
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.18');
+define('SDD_VERSION', '1.0.19');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -1036,6 +1036,9 @@ function sdd_render_overview($students, $metrics) {
     $no_progress_students = array_values(array_filter($students, static function ($student) {
         return $student['course_count'] > 0 && 0 === absint($student['average_progress']);
     }));
+    $contact_due_students = array_values(array_filter($students, static function ($student) {
+        return sdd_is_student_contact_due($student);
+    }));
     $course_bottlenecks = array_slice(array_filter($metrics['course_bottlenecks'], static function ($course) {
         return $course['bottleneck_score'] > 0;
     }), 0, 5);
@@ -1052,10 +1055,14 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Novos 6 meses', $metrics['insights']['enrolled_six_months'], 'matrículas recentes'); ?>
         <?php sdd_metric_card('Cursos concluídos', $metrics['insights']['completed_courses'], 'em todos os alunos filtrados'); ?>
         <?php sdd_metric_card('Com conclusão', $metrics['insights']['students_with_completion'], 'alunos com 1+ curso concluído'); ?>
+        <?php sdd_metric_card('Sem contato', $metrics['insights']['never_contacted'], 'nenhum contato registrado'); ?>
+        <?php sdd_metric_card('Contato 30+ dias', $metrics['insights']['contact_due_30'], 'precisam retomada'); ?>
+        <?php sdd_metric_card('Contato 7 dias', $metrics['insights']['contacted_7'], 'acompanhados recentemente'); ?>
     </div>
     <div class="sdd-visual-grid">
         <?php sdd_render_distribution_panel('Matrículas nos últimos 6 meses', 'Novos alunos por mês', $metrics['insights']['enrollment_trend']); ?>
         <?php sdd_render_distribution_panel('Distribuição de progresso', 'Onde os alunos estão no caminho acadêmico', $metrics['insights']['progress_distribution']); ?>
+        <?php sdd_render_distribution_panel('Ritmo de contato', 'Frequência de acompanhamento da equipe', $metrics['insights']['contact_cadence']); ?>
         <?php sdd_render_distribution_panel('Níveis', 'Básico, Intermediário e Avançado', $metrics['insights']['levels']); ?>
         <?php sdd_render_distribution_panel('Teologia', 'Perfil declarado pelos alunos', $metrics['insights']['theologies']); ?>
         <?php sdd_render_distribution_panel('Igrejas com mais alunos', 'Top 5 no filtro atual', $metrics['insights']['churches']); ?>
@@ -1063,6 +1070,7 @@ function sdd_render_overview($students, $metrics) {
     <div class="sdd-overview-grid">
         <?php sdd_render_overview_panel('Precisam de acompanhamento', 'Sinais calculados pelo sistema', $followup_students, 'student'); ?>
         <?php sdd_render_overview_panel('Parados recentemente', 'Sem atividade nos últimos 30 dias', $inactive_students, 'student'); ?>
+        <?php sdd_render_overview_panel('Contato atrasado', 'Nunca contatados ou sem contato há 30+ dias', $contact_due_students, 'contact'); ?>
         <?php sdd_render_overview_panel('Perto de concluir', 'Progresso alto, mas ainda incompleto', $near_completion_students, 'student'); ?>
         <?php sdd_render_overview_panel('Sem progresso após matrícula', 'Matriculados com progresso em 0%', $no_progress_students, 'student'); ?>
         <?php sdd_render_overview_panel('Cursos com gargalo', 'Mais alunos parados ou com baixo progresso', $course_bottlenecks, 'course'); ?>
@@ -1110,12 +1118,21 @@ function sdd_get_overview_insights($students) {
     $enrolled_six_months = 0;
     $completed_courses = 0;
     $students_with_completion = 0;
+    $never_contacted = 0;
+    $contact_due_30 = 0;
+    $contacted_7 = 0;
     $progress_distribution = [
         '0%' => 0,
         '1-34%' => 0,
         '35-84%' => 0,
         '85-99%' => 0,
         '100%' => 0,
+    ];
+    $contact_cadence = [
+        'Nunca contatado' => 0,
+        '30+ dias' => 0,
+        '8-29 dias' => 0,
+        'Últimos 7 dias' => 0,
     ];
     $enrollment_trend = sdd_get_recent_month_buckets(6, $now);
     $levels = [];
@@ -1158,6 +1175,20 @@ function sdd_get_overview_insights($students) {
             $progress_distribution['100%']++;
         }
 
+        $last_contacted = absint($student['last_contacted_at'] ?? 0);
+        if (!$last_contacted) {
+            $never_contacted++;
+            $contact_cadence['Nunca contatado']++;
+        } elseif ($last_contacted < $now - (30 * DAY_IN_SECONDS)) {
+            $contact_due_30++;
+            $contact_cadence['30+ dias']++;
+        } elseif ($last_contacted < $now - (7 * DAY_IN_SECONDS)) {
+            $contact_cadence['8-29 dias']++;
+        } else {
+            $contacted_7++;
+            $contact_cadence['Últimos 7 dias']++;
+        }
+
         sdd_increment_count($levels, $student['level'] ?: 'Não informado');
         sdd_increment_count($theologies, $student['theology'] ?: 'Não informado');
         sdd_increment_count($churches, $student['church'] ?: 'Não informado');
@@ -1172,8 +1203,12 @@ function sdd_get_overview_insights($students) {
         'enrolled_six_months' => $enrolled_six_months,
         'completed_courses' => $completed_courses,
         'students_with_completion' => $students_with_completion,
+        'never_contacted' => $never_contacted,
+        'contact_due_30' => $contact_due_30,
+        'contacted_7' => $contacted_7,
         'enrollment_trend' => $enrollment_trend,
         'progress_distribution' => $progress_distribution,
+        'contact_cadence' => $contact_cadence,
         'levels' => array_slice($levels, 0, 5, true),
         'theologies' => array_slice($theologies, 0, 5, true),
         'churches' => array_slice($churches, 0, 5, true),
@@ -1249,7 +1284,11 @@ function sdd_render_overview_panel($title, $hint, $items, $type) {
                     <?php else : ?>
                         <article class="sdd-overview-item">
                             <strong><?php echo esc_html($item['name']); ?></strong>
-                            <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                            <?php if ('contact' === $type) : ?>
+                                <span><?php echo esc_html('Último contato: ' . sdd_get_last_contact_label($item) . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                            <?php else : ?>
+                                <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                            <?php endif; ?>
                             <?php if ($item['signals']) : ?>
                                 <div class="sdd-signal-list">
                                     <?php foreach (array_slice($item['signals'], 0, 2) as $signal) : ?>
@@ -1264,6 +1303,12 @@ function sdd_render_overview_panel($title, $hint, $items, $type) {
         <?php endif; ?>
     </section>
     <?php
+}
+
+function sdd_is_student_contact_due($student) {
+    $last_contacted = absint($student['last_contacted_at'] ?? 0);
+
+    return 0 === $last_contacted || $last_contacted < time() - (30 * DAY_IN_SECONDS);
 }
 
 function sdd_metric_card($label, $value, $hint) {
