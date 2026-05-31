@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.17
+ * Version: 1.0.18
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.17');
+define('SDD_VERSION', '1.0.18');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -114,7 +114,7 @@ function sdd_ajax_export_students() {
     header('Content-Disposition: attachment; filename=ibbi-alunos-' . gmdate('Y-m-d') . '.csv');
 
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Nome', 'Email', 'WhatsApp', 'Igreja', 'Cidade', 'Estado', 'Status', 'Nivel', 'Teologia', 'Supervisor', 'Cursos concluidos', 'Cursos matriculados', 'Progresso medio', 'Ultima atividade', 'Prioridade']);
+    fputcsv($output, ['Nome', 'Email', 'WhatsApp', 'Igreja', 'Cidade', 'Estado', 'Status', 'Nivel', 'Teologia', 'Supervisor', 'Cursos concluidos', 'Cursos matriculados', 'Progresso medio', 'Ultima atividade', 'Prioridade', 'Ultimo contato', 'Acompanhamento atualizado', 'Notas']);
 
     foreach ($students as $student) {
         fputcsv(
@@ -135,6 +135,9 @@ function sdd_ajax_export_students() {
                 $student['average_progress'] . '%',
                 $student['last_activity_label'],
                 sdd_get_attention_label($student['attention_score']),
+                sdd_get_last_contact_label($student),
+                sdd_get_staff_update_label($student),
+                $student['admin_notes'],
             ]
         );
     }
