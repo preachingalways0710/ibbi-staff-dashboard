@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.21
+ * Version: 1.0.22
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.21');
+define('SDD_VERSION', '1.0.22');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -236,7 +236,6 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
                 <h2><?php echo esc_html($atts['title']); ?></h2>
             </div>
             <div class="sdd-dashboard__status">
-                <span><?php echo function_exists('tutor_utils') ? esc_html__('Tutor LMS conectado', 'sdd') : esc_html__('Tutor LMS não detectado', 'sdd'); ?></span>
                 <span><?php echo esc_html(sprintf(__('Versão %s', 'sdd'), SDD_VERSION)); ?></span>
             </div>
         </header>

@@ -70,12 +70,6 @@
   white-space: nowrap;
 }
 
-.sdd-dashboard__status span + span {
-  background: #f4f6f8;
-  border-color: #d7dee8;
-  color: #4b5563;
-}
-
 .sdd-tabs {
   border-bottom: 1px solid var(--sdd-border);
   display: flex;
