@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.24
+ * Version: 1.0.25
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.24');
+define('SDD_VERSION', '1.0.25');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -516,6 +516,33 @@ function sdd_format_quiz_mark($mark) {
     return number_format_i18n($mark, $decimals);
 }
 
+function sdd_is_elective_course($course_id) {
+    return has_term('optativa', 'course-category', absint($course_id));
+}
+
+function sdd_get_required_course_ids() {
+    static $required_course_ids = null;
+
+    if (null !== $required_course_ids) {
+        return $required_course_ids;
+    }
+
+    $published_course_ids = get_posts([
+        'post_type' => 'courses',
+        'post_status' => 'publish',
+        'posts_per_page' => -1,
+        'fields' => 'ids',
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ]);
+
+    $required_course_ids = array_values(array_filter(array_map('absint', $published_course_ids), static function ($course_id) {
+        return !sdd_is_elective_course($course_id);
+    }));
+
+    return $required_course_ids;
+}
+
 function sdd_get_student_academic_issues($user_id) {
     global $wpdb;
 
@@ -588,6 +615,7 @@ function sdd_get_student_academic_issues($user_id) {
         $seen_quizzes[$quiz_key] = true;
         $attempt_id = absint($row->attempt_id);
         $issue_type = 'review_required' === $row->attempt_status ? 'review' : 'correction';
+        $is_elective = sdd_is_elective_course($row->course_id);
         $review_base_url = current_user_can('manage_options')
             ? admin_url('admin.php?page=tutor_quiz_attempts')
             : tutor_utils()->tutor_dashboard_url('quiz-attempts');
@@ -602,6 +630,9 @@ function sdd_get_student_academic_issues($user_id) {
             'quiz_title' => $row->quiz_title ?: get_the_title($quiz_id),
             'type' => $issue_type,
             'status_label' => 'review' === $issue_type ? 'Aguardando revisão' : 'Correção necessária',
+            'elective' => $is_elective,
+            'requirement_label' => $is_elective ? 'Optativa (não bloqueia certificado)' : 'Obrigatória',
+            'blocks_certificate' => !$is_elective,
             'submitted_at' => $row->attempt_ended_at,
             'submitted_label' => $row->attempt_ended_at ? date_i18n('d/m/Y H:i', strtotime($row->attempt_ended_at)) : 'Sem registro',
             'score_label' => sdd_format_quiz_mark($row->earned_marks) . '/' . sdd_format_quiz_mark($row->total_marks),
@@ -636,6 +667,7 @@ function sdd_get_student_courses($user_id) {
         $course_id = absint($course->ID);
         $progress = absint(tutor_utils()->get_course_completed_percent($course_id, $user_id));
         $completed = (bool) tutor_utils()->is_completed_course($course_id, $user_id);
+        $is_elective = sdd_is_elective_course($course_id);
         $enrolled_at = $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT post_date FROM {$wpdb->posts} WHERE post_type = 'tutor_enrolled' AND post_author = %d AND post_parent = %d ORDER BY post_date DESC LIMIT 1",
@@ -657,6 +689,8 @@ function sdd_get_student_courses($user_id) {
             'progress' => min(100, $progress),
             'status' => $completed ? 'Concluído' : ($progress > 0 ? 'Em andamento' : 'Não iniciado'),
             'completed' => $completed,
+            'elective' => $is_elective,
+            'requirement_label' => $is_elective ? 'Optativa' : 'Obrigatória',
             'enrolled_at' => $enrolled_at,
             'completed_at' => $completed_at,
             'enrolled_label' => $enrolled_at ? date_i18n('d/m/Y H:i', strtotime($enrolled_at)) : 'Sem registro',
@@ -691,7 +725,9 @@ function sdd_get_student_summary($user) {
         } elseif ($has_correction) {
             $academic_status = 'Correção necessária';
         } elseif ($course['completed']) {
-            $academic_status = 'Aprovado';
+            $academic_status = $course['elective'] ? 'Aprovado (optativa)' : 'Aprovado';
+        } elseif ($course['elective']) {
+            $academic_status = 'Optativa não concluída';
         } else {
             $academic_status = 'Pendente';
         }
@@ -709,6 +745,49 @@ function sdd_get_student_summary($user) {
     $approved_count = count(array_filter($courses, static function ($course) {
         return !empty($course['approved']);
     }));
+    $courses_by_id = [];
+
+    foreach ($courses as $course) {
+        $courses_by_id[$course['id']] = $course;
+    }
+
+    $required_course_ids = sdd_get_required_course_ids();
+    $required_course_count = count($required_course_ids);
+    $required_approved_count = 0;
+    $required_blockers = [];
+
+    foreach ($required_course_ids as $required_course_id) {
+        $required_course = $courses_by_id[$required_course_id] ?? null;
+
+        if ($required_course && $required_course['approved']) {
+            $required_approved_count++;
+            continue;
+        }
+
+        $required_blockers[] = [
+            'course_id' => $required_course_id,
+            'course_title' => $required_course['title'] ?? get_the_title($required_course_id),
+            'status' => $required_course['academic_status'] ?? 'Não matriculado',
+        ];
+    }
+
+    $elective_courses = array_filter($courses, static function ($course) {
+        return !empty($course['elective']);
+    });
+    $elective_completed_count = count(array_filter($elective_courses, static function ($course) {
+        return !empty($course['completed']);
+    }));
+    $required_academic_issue_count = count(array_filter($academic_issues, static function ($issue) {
+        return !empty($issue['blocks_certificate']);
+    }));
+    $certificate_ready = $required_course_count > 0 && $required_approved_count === $required_course_count;
+    $required_blocker_count = count($required_blockers);
+    $certificate_label = $certificate_ready
+        ? 'Apto para certificado'
+        : sprintf(
+            _n('%d pendência obrigatória', '%d pendências obrigatórias', $required_blocker_count, 'sdd'),
+            $required_blocker_count
+        );
     $average_progress = 0;
 
     if ($course_count > 0) {
@@ -757,7 +836,16 @@ function sdd_get_student_summary($user) {
         'completed_count' => $completed_count,
         'approved_count' => $approved_count,
         'academic_issue_count' => count($academic_issues),
+        'required_academic_issue_count' => $required_academic_issue_count,
         'academic_issues' => $academic_issues,
+        'required_course_count' => $required_course_count,
+        'required_approved_count' => $required_approved_count,
+        'required_blocker_count' => $required_blocker_count,
+        'required_blockers' => $required_blockers,
+        'elective_course_count' => count($elective_courses),
+        'elective_completed_count' => $elective_completed_count,
+        'certificate_ready' => $certificate_ready,
+        'certificate_label' => $certificate_label,
         'average_progress' => $average_progress,
         'courses' => $courses,
     ];
@@ -1603,15 +1691,12 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                             </td>
                             <td><span class="sdd-pill"><?php echo esc_html($student['status']); ?></span></td>
                             <td>
-                                <?php echo esc_html($student['completed_count'] . '/' . $student['course_count']); ?>
+                                <?php echo esc_html($student['completed_count'] . '/' . $student['course_count'] . ' no Tutor'); ?>
                                 <span>
                                     <?php
                                     echo esc_html(
-                                        sprintf(
-                                            '%d aprovados%s',
-                                            absint($student['approved_count']),
-                                            $student['academic_issue_count'] ? ' · ' . absint($student['academic_issue_count']) . ' pendentes' : ''
-                                        )
+                                        $student['required_approved_count'] . '/' . $student['required_course_count'] . ' obrigatórias · '
+                                        . $student['certificate_label']
                                     );
                                     ?>
                                 </span>
@@ -1644,8 +1729,9 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Cursos no Tutor', 'sdd'); ?></dt><dd><?php echo esc_html($student['completed_count'] . '/' . $student['course_count'] . ' concluídos'); ?></dd></div>
-                                            <div><dt><?php echo esc_html__('Aprovação acadêmica', 'sdd'); ?></dt><dd><?php echo esc_html($student['approved_count'] . ' aprovados · ' . $student['academic_issue_count'] . ' pendências'); ?></dd></div>
-                                            <div><dt><?php echo esc_html__('Certificado (revisões)', 'sdd'); ?></dt><dd><?php echo esc_html($student['academic_issue_count'] ? 'Aguardar revisão' : 'Sem bloqueio por revisão'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Matérias obrigatórias', 'sdd'); ?></dt><dd><?php echo esc_html($student['required_approved_count'] . '/' . $student['required_course_count'] . ' aprovadas'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Matérias optativas', 'sdd'); ?></dt><dd><?php echo esc_html($student['elective_completed_count'] . '/' . $student['elective_course_count'] . ' concluídas'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Certificado', 'sdd'); ?></dt><dd><?php echo esc_html($student['certificate_ready'] ? 'Apto para emissão' : $student['certificate_label']); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Acompanhamento atualizado', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_staff_update_label($student)); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Último contato', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_last_contact_label($student)); ?></dd></div>
                                         </dl>
@@ -1709,14 +1795,14 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div class="sdd-academic-issues">
                                                 <div class="sdd-academic-issues__header">
                                                     <h4><?php echo esc_html__('Pendências acadêmicas', 'sdd'); ?></h4>
-                                                    <span><?php echo esc_html__('Estas atividades precisam ser resolvidas antes da aprovação acadêmica.', 'sdd'); ?></span>
+                                                    <span><?php echo esc_html__('Revise as atividades abaixo. Somente pendências obrigatórias bloqueiam o certificado.', 'sdd'); ?></span>
                                                 </div>
                                                 <div class="sdd-academic-issue-list">
                                                     <?php foreach ($student['academic_issues'] as $issue) : ?>
                                                         <article class="sdd-academic-issue">
                                                             <div>
                                                                 <strong><?php echo esc_html($issue['course_title']); ?></strong>
-                                                                <span><?php echo esc_html($issue['quiz_title'] . ' · ' . $issue['status_label']); ?></span>
+                                                                <span><?php echo esc_html($issue['quiz_title'] . ' · ' . $issue['status_label'] . ' · ' . $issue['requirement_label']); ?></span>
                                                                 <small>
                                                                     <?php
                                                                     echo esc_html(
@@ -1751,6 +1837,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                                     echo esc_html(
                                                         'Tutor: ' . $course['status']
                                                         . ' · Instituto: ' . $course['academic_status']
+                                                        . ' · Requisito: ' . $course['requirement_label']
                                                         . ' · ' . $course['progress'] . '%'
                                                         . ' · Matrícula: ' . $course['enrolled_label']
                                                         . ' · Conclusão Tutor: ' . $course['completed_label']
