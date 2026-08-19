@@ -811,6 +811,99 @@
   font-weight: 700;
 }
 
+.sdd-academic-issues {
+  border: 1px solid #d8b75f;
+  margin-bottom: 22px;
+}
+
+.sdd-academic-issues__header {
+  background: #fff7dc;
+  border-bottom: 1px solid #e2ca88;
+  padding: 12px 14px;
+}
+
+.sdd-student-detail .sdd-academic-issues__header h4 {
+  color: #59440e;
+  margin-bottom: 4px;
+}
+
+.sdd-academic-issues__header span {
+  color: #705b25;
+  display: block;
+  font-size: 12px;
+  margin: 0;
+}
+
+.sdd-academic-issue-list {
+  background: #fff;
+}
+
+.sdd-academic-issue {
+  align-items: center;
+  border-bottom: 1px solid var(--sdd-border);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 13px 14px;
+}
+
+.sdd-academic-issue:last-child {
+  border-bottom: 0;
+}
+
+.sdd-academic-issue strong,
+.sdd-academic-issue span,
+.sdd-academic-issue small {
+  display: block;
+}
+
+.sdd-academic-issue strong {
+  color: var(--sdd-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.sdd-academic-issue span {
+  color: #765713;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.sdd-academic-issue small {
+  color: var(--sdd-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.sdd-dashboard .sdd-review-action {
+  background: var(--sdd-accent-2);
+  border: 1px solid var(--sdd-accent-2);
+  color: #fff;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0;
+  padding: 7px 9px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sdd-dashboard .sdd-review-action:hover,
+.sdd-dashboard .sdd-review-action:focus {
+  background: #1c4845;
+  border-color: #1c4845;
+  color: #fff;
+}
+
+.sdd-review-permission {
+  color: var(--sdd-muted);
+  font-size: 11px;
+  margin: 0;
+  text-align: right;
+}
+
 .sdd-course-list {
   display: grid;
   gap: 14px 18px;
@@ -820,6 +913,12 @@
 .sdd-course-list div {
   border-left: 3px solid var(--sdd-accent-2);
   padding: 4px 0 4px 12px;
+}
+
+.sdd-course-list div.has-academic-issue {
+  background: #fffaf0;
+  border-left-color: #b67b12;
+  padding: 8px 10px 8px 12px;
 }
 
 .sdd-course-list strong {
@@ -863,5 +962,14 @@
   .sdd-staff-form,
   .sdd-course-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sdd-academic-issue {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .sdd-review-permission {
+    text-align: left;
   }
 }

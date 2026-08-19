@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.23
+ * Version: 1.0.24
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.23');
+define('SDD_VERSION', '1.0.24');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -509,6 +509,111 @@ function sdd_get_student_last_activity($user_id) {
     return $last_activity;
 }
 
+function sdd_format_quiz_mark($mark) {
+    $mark = (float) $mark;
+    $decimals = floor($mark) === $mark ? 0 : 2;
+
+    return number_format_i18n($mark, $decimals);
+}
+
+function sdd_get_student_academic_issues($user_id) {
+    global $wpdb;
+
+    static $issues_by_user = null;
+
+    if (!function_exists('tutor_utils')) {
+        return [];
+    }
+
+    if (null !== $issues_by_user) {
+        return $issues_by_user[absint($user_id)] ?? [];
+    }
+
+    $attempts_table = $wpdb->prefix . 'tutor_quiz_attempts';
+    $rows = $wpdb->get_results(
+        "SELECT
+                issue.attempt_id,
+                issue.user_id,
+                issue.course_id,
+                issue.quiz_id,
+                issue.total_questions,
+                issue.total_answered_questions,
+                issue.total_marks,
+                issue.earned_marks,
+                issue.attempt_status,
+                issue.result,
+                issue.is_manually_reviewed,
+                issue.attempt_ended_at,
+                course.post_title AS course_title,
+                quiz.post_title AS quiz_title
+             FROM {$attempts_table} issue
+             LEFT JOIN {$wpdb->posts} course ON course.ID = issue.course_id
+             LEFT JOIN {$wpdb->posts} quiz ON quiz.ID = issue.quiz_id
+             WHERE (
+                    issue.attempt_status = 'review_required'
+                    OR (
+                        issue.attempt_status = 'attempt_ended'
+                        AND issue.is_manually_reviewed = 1
+                        AND issue.result = 'fail'
+                    )
+               )
+               AND NOT EXISTS (
+                    SELECT 1
+                    FROM {$attempts_table} passed
+                    WHERE passed.user_id = issue.user_id
+                      AND passed.quiz_id = issue.quiz_id
+                      AND passed.attempt_status = 'attempt_ended'
+                      AND passed.result = 'pass'
+               )
+             ORDER BY issue.attempt_ended_at DESC, issue.attempt_id DESC"
+    );
+
+    $issues_by_user = [];
+
+    if (!$rows) {
+        return [];
+    }
+
+    $seen_quizzes = [];
+
+    foreach ($rows as $row) {
+        $row_user_id = absint($row->user_id);
+        $quiz_id = absint($row->quiz_id);
+        $quiz_key = $row_user_id . ':' . $quiz_id;
+
+        if (!$row_user_id || !$quiz_id || isset($seen_quizzes[$quiz_key])) {
+            continue;
+        }
+
+        $seen_quizzes[$quiz_key] = true;
+        $attempt_id = absint($row->attempt_id);
+        $issue_type = 'review_required' === $row->attempt_status ? 'review' : 'correction';
+        $review_base_url = current_user_can('manage_options')
+            ? admin_url('admin.php?page=tutor_quiz_attempts')
+            : tutor_utils()->tutor_dashboard_url('quiz-attempts');
+        $can_review = current_user_can('manage_options')
+            || (method_exists(tutor_utils(), 'can_user_manage') && tutor_utils()->can_user_manage('attempt', $attempt_id));
+
+        $issues_by_user[$row_user_id][] = [
+            'attempt_id' => $attempt_id,
+            'course_id' => absint($row->course_id),
+            'course_title' => $row->course_title ?: get_the_title($row->course_id),
+            'quiz_id' => $quiz_id,
+            'quiz_title' => $row->quiz_title ?: get_the_title($quiz_id),
+            'type' => $issue_type,
+            'status_label' => 'review' === $issue_type ? 'Aguardando revisão' : 'Correção necessária',
+            'submitted_at' => $row->attempt_ended_at,
+            'submitted_label' => $row->attempt_ended_at ? date_i18n('d/m/Y H:i', strtotime($row->attempt_ended_at)) : 'Sem registro',
+            'score_label' => sdd_format_quiz_mark($row->earned_marks) . '/' . sdd_format_quiz_mark($row->total_marks),
+            'answers_label' => absint($row->total_answered_questions) . '/' . absint($row->total_questions),
+            'review_url' => add_query_arg('attempt_id', $attempt_id, $review_base_url),
+            'can_review' => $can_review,
+        ];
+    }
+
+    return $issues_by_user[absint($user_id)] ?? [];
+}
+
 function sdd_get_student_courses($user_id) {
     global $wpdb;
 
@@ -565,9 +670,44 @@ function sdd_get_student_courses($user_id) {
 function sdd_get_student_summary($user) {
     $user_id = $user->ID;
     $courses = sdd_get_student_courses($user_id);
+    $academic_issues = sdd_get_student_academic_issues($user_id);
+    $issues_by_course = [];
+
+    foreach ($academic_issues as $issue) {
+        $issues_by_course[$issue['course_id']][] = $issue;
+    }
+
+    foreach ($courses as &$course) {
+        $course_issues = $issues_by_course[$course['id']] ?? [];
+        $has_review = (bool) array_filter($course_issues, static function ($issue) {
+            return 'review' === $issue['type'];
+        });
+        $has_correction = (bool) array_filter($course_issues, static function ($issue) {
+            return 'correction' === $issue['type'];
+        });
+
+        if ($has_review) {
+            $academic_status = 'Aguardando revisão';
+        } elseif ($has_correction) {
+            $academic_status = 'Correção necessária';
+        } elseif ($course['completed']) {
+            $academic_status = 'Aprovado';
+        } else {
+            $academic_status = 'Pendente';
+        }
+
+        $course['academic_status'] = $academic_status;
+        $course['academic_issue_count'] = count($course_issues);
+        $course['approved'] = $course['completed'] && !$course_issues;
+    }
+    unset($course);
+
     $course_count = count($courses);
     $completed_count = count(array_filter($courses, static function ($course) {
         return !empty($course['completed']);
+    }));
+    $approved_count = count(array_filter($courses, static function ($course) {
+        return !empty($course['approved']);
     }));
     $average_progress = 0;
 
@@ -615,6 +755,9 @@ function sdd_get_student_summary($user) {
         'last_activity_label' => $last_activity ? date_i18n('d/m/Y', $last_activity) : 'Sem registro',
         'course_count' => $course_count,
         'completed_count' => $completed_count,
+        'approved_count' => $approved_count,
+        'academic_issue_count' => count($academic_issues),
+        'academic_issues' => $academic_issues,
         'average_progress' => $average_progress,
         'courses' => $courses,
     ];
@@ -678,6 +821,10 @@ function sdd_get_student_attention_score($student) {
         $score += 15;
     }
 
+    if (!empty($student['academic_issue_count'])) {
+        $score += min(30, absint($student['academic_issue_count']) * 15);
+    }
+
     if (!empty($student['last_contacted_at']) && $student['last_contacted_at'] >= time() - (7 * DAY_IN_SECONDS)) {
         $score -= 18;
     }
@@ -717,6 +864,13 @@ function sdd_get_student_signals($student) {
 
     if (0 === strcasecmp($student['status'], 'Parado') || 0 === strcasecmp($student['status'], 'Trancado')) {
         $signals[] = 'Requer acompanhamento';
+    }
+
+    if (!empty($student['academic_issue_count'])) {
+        $signals[] = sprintf(
+            _n('%d pendência acadêmica', '%d pendências acadêmicas', absint($student['academic_issue_count']), 'sdd'),
+            absint($student['academic_issue_count'])
+        );
     }
 
     return array_values(array_unique($signals));
@@ -1448,7 +1602,20 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                 <span><?php echo esc_html(trim($student['city'] . ' ' . $student['state']) ?: ''); ?></span>
                             </td>
                             <td><span class="sdd-pill"><?php echo esc_html($student['status']); ?></span></td>
-                            <td><?php echo esc_html($student['completed_count'] . '/' . $student['course_count']); ?></td>
+                            <td>
+                                <?php echo esc_html($student['completed_count'] . '/' . $student['course_count']); ?>
+                                <span>
+                                    <?php
+                                    echo esc_html(
+                                        sprintf(
+                                            '%d aprovados%s',
+                                            absint($student['approved_count']),
+                                            $student['academic_issue_count'] ? ' · ' . absint($student['academic_issue_count']) . ' pendentes' : ''
+                                        )
+                                    );
+                                    ?>
+                                </span>
+                            </td>
                             <td><?php echo sdd_progress_bar($student['average_progress']); ?></td>
                             <td>
                                 <?php echo esc_html($student['last_activity_label']); ?>
@@ -1476,6 +1643,9 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Supervisor', 'sdd'); ?></dt><dd><?php echo esc_html($student['supervisor'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Cursos no Tutor', 'sdd'); ?></dt><dd><?php echo esc_html($student['completed_count'] . '/' . $student['course_count'] . ' concluídos'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Aprovação acadêmica', 'sdd'); ?></dt><dd><?php echo esc_html($student['approved_count'] . ' aprovados · ' . $student['academic_issue_count'] . ' pendências'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Certificado (revisões)', 'sdd'); ?></dt><dd><?php echo esc_html($student['academic_issue_count'] ? 'Aguardar revisão' : 'Sem bloqueio por revisão'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Acompanhamento atualizado', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_staff_update_label($student)); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Último contato', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_last_contact_label($student)); ?></dd></div>
                                         </dl>
@@ -1535,13 +1705,58 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                         </form>
                                     </section>
                                     <section>
+                                        <?php if ($student['academic_issues']) : ?>
+                                            <div class="sdd-academic-issues">
+                                                <div class="sdd-academic-issues__header">
+                                                    <h4><?php echo esc_html__('Pendências acadêmicas', 'sdd'); ?></h4>
+                                                    <span><?php echo esc_html__('Estas atividades precisam ser resolvidas antes da aprovação acadêmica.', 'sdd'); ?></span>
+                                                </div>
+                                                <div class="sdd-academic-issue-list">
+                                                    <?php foreach ($student['academic_issues'] as $issue) : ?>
+                                                        <article class="sdd-academic-issue">
+                                                            <div>
+                                                                <strong><?php echo esc_html($issue['course_title']); ?></strong>
+                                                                <span><?php echo esc_html($issue['quiz_title'] . ' · ' . $issue['status_label']); ?></span>
+                                                                <small>
+                                                                    <?php
+                                                                    echo esc_html(
+                                                                        'Envio: ' . $issue['submitted_label']
+                                                                        . ' · Nota atual: ' . $issue['score_label']
+                                                                        . ' · Respostas: ' . $issue['answers_label']
+                                                                        . ' · Tentativa #' . $issue['attempt_id']
+                                                                    );
+                                                                    ?>
+                                                                </small>
+                                                            </div>
+                                                            <?php if ($issue['can_review']) : ?>
+                                                                <a class="sdd-review-action" href="<?php echo esc_url($issue['review_url']); ?>" target="_blank" rel="noopener">
+                                                                    <?php echo esc_html('review' === $issue['type'] ? 'Revisar no Tutor LMS' : 'Ver avaliação no Tutor LMS'); ?>
+                                                                </a>
+                                                            <?php else : ?>
+                                                                <span class="sdd-review-permission"><?php echo esc_html__('Sem permissão para revisar', 'sdd'); ?></span>
+                                                            <?php endif; ?>
+                                                        </article>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
                                         <h4><?php echo esc_html__('Progresso nas matérias', 'sdd'); ?></h4>
                                         <?php if ($student['courses']) : ?>
                                     <div class="sdd-course-list">
                                         <?php foreach ($student['courses'] as $course) : ?>
-                                            <div>
+                                            <div<?php echo $course['academic_issue_count'] ? ' class="has-academic-issue"' : ''; ?>>
                                                 <strong><?php echo esc_html($course['title']); ?></strong>
-                                                <span><?php echo esc_html($course['status'] . ' · ' . $course['progress'] . '% · Matrícula: ' . $course['enrolled_label'] . ' · Conclusão: ' . $course['completed_label']); ?></span>
+                                                <span>
+                                                    <?php
+                                                    echo esc_html(
+                                                        'Tutor: ' . $course['status']
+                                                        . ' · Instituto: ' . $course['academic_status']
+                                                        . ' · ' . $course['progress'] . '%'
+                                                        . ' · Matrícula: ' . $course['enrolled_label']
+                                                        . ' · Conclusão Tutor: ' . $course['completed_label']
+                                                    );
+                                                    ?>
+                                                </span>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
