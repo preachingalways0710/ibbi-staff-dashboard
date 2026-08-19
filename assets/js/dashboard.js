@@ -7,8 +7,17 @@
     const clearFilters = dashboard.querySelector('[data-sdd-clear-filters]');
     const exportButton = dashboard.querySelector('[data-sdd-export]');
     const results = dashboard.querySelector('[data-sdd-results]');
+    const urlParams = new URLSearchParams(window.location.search);
+    const directStudentId = urlParams.get('student_id') || urlParams.get('sdd_student_id') || '';
     let activeView = 'overview';
     let debounceTimer = null;
+
+    if (/^\d+$/.test(directStudentId)) {
+      activeView = 'person';
+      tabs.forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.sddView === activeView);
+      });
+    }
 
     const setLoading = () => {
       results.innerHTML = '<div class="sdd-loading">' + sddDashboard.labels.loading + '</div>';
@@ -19,6 +28,9 @@
       data.append('action', 'sdd_dashboard_data');
       data.append('nonce', sddDashboard.nonce);
       data.append('view', activeView);
+      if (/^\d+$/.test(directStudentId)) {
+        data.append('student_id', directStudentId);
+      }
       return data;
     };
 
@@ -37,6 +49,9 @@
           }
 
           results.innerHTML = payload.data.html;
+          if (/^\d+$/.test(directStudentId)) {
+            openDirectStudentDetail(directStudentId);
+          }
         })
         .catch(() => {
           results.innerHTML = '<p class="sdd-empty">' + sddDashboard.labels.error + '</p>';
@@ -103,6 +118,20 @@
       toggle.textContent = isOpening ? 'Ocultar detalhes' : 'Ver detalhes';
       toggle.closest('tr')?.classList.toggle('is-expanded', isOpening);
     });
+
+    const openDirectStudentDetail = (studentId) => {
+      const detail = document.getElementById('sdd-student-detail-' + studentId);
+      const toggle = detail ? results.querySelector('[data-sdd-toggle="' + detail.id + '"]') : null;
+
+      if (!detail || !toggle) {
+        return;
+      }
+
+      detail.removeAttribute('hidden');
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.textContent = 'Ocultar detalhes';
+      toggle.closest('tr')?.classList.add('is-expanded');
+    };
 
     results.addEventListener('submit', (event) => {
       const form = event.target.closest('[data-sdd-staff-form]');

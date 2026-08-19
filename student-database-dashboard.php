@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.22
+ * Version: 1.0.23
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.22');
+define('SDD_VERSION', '1.0.23');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -378,6 +378,7 @@ function sdd_current_user_can_view_dashboard() {
 
 function sdd_sanitize_dashboard_filters($input) {
     return [
+        'student_id' => isset($input['student_id']) ? absint($input['student_id']) : 0,
         'search' => isset($input['search']) ? sanitize_text_field(wp_unslash($input['search'])) : '',
         'status' => isset($input['status']) ? sanitize_text_field(wp_unslash($input['status'])) : '',
         'activity' => isset($input['activity']) ? absint($input['activity']) : 0,
@@ -422,12 +423,44 @@ function sdd_get_student_filter_options() {
 }
 
 function sdd_get_student_users() {
-    return get_users([
+    $student_users = get_users([
         'role__in' => ['subscriber', 'student', 'tutor_student'],
         'orderby' => 'display_name',
         'order' => 'ASC',
-        'number' => 500,
+        'number' => -1,
     ]);
+
+    $users_by_id = [];
+    foreach ($student_users as $user) {
+        $users_by_id[$user->ID] = $user;
+    }
+
+    global $wpdb;
+    $enrolled_user_ids = $wpdb->get_col(
+        "SELECT DISTINCT post_author
+         FROM {$wpdb->posts}
+         WHERE post_type = 'tutor_enrolled'
+           AND post_author > 0"
+    );
+
+    foreach ($enrolled_user_ids as $user_id) {
+        $user_id = absint($user_id);
+        if (!$user_id || isset($users_by_id[$user_id])) {
+            continue;
+        }
+
+        $user = get_user_by('id', $user_id);
+        if ($user) {
+            $users_by_id[$user_id] = $user;
+        }
+    }
+
+    $users = array_values($users_by_id);
+    usort($users, static function ($a, $b) {
+        return strcasecmp(sdd_get_student_name($a), sdd_get_student_name($b));
+    });
+
+    return $users;
 }
 
 function sdd_get_tutor_courses() {
@@ -521,6 +554,8 @@ function sdd_get_student_courses($user_id) {
             'completed' => $completed,
             'enrolled_at' => $enrolled_at,
             'completed_at' => $completed_at,
+            'enrolled_label' => $enrolled_at ? date_i18n('d/m/Y H:i', strtotime($enrolled_at)) : 'Sem registro',
+            'completed_label' => $completed_at ? date_i18n('d/m/Y H:i', strtotime($completed_at)) : 'Sem registro',
         ];
     }
 
@@ -555,6 +590,7 @@ function sdd_get_student_summary($user) {
         'id' => $user_id,
         'name' => sdd_get_student_name($user),
         'email' => $user->user_email,
+        'username' => $user->user_login,
         'whatsapp' => sdd_get_user_meta_first($user_id, ['_bi_whatsapp', 'phone', 'billing_phone']),
         'birthdate' => sdd_get_user_meta_first($user_id, ['data_de_nascimento', 'birthdate']),
         'church' => sdd_get_user_meta_first($user_id, ['_bi_church', 'church_name', 'igreja']),
@@ -687,6 +723,10 @@ function sdd_get_student_signals($student) {
 }
 
 function sdd_student_matches_filters($student, $filters) {
+    if (!empty($filters['student_id']) && absint($student['id']) !== absint($filters['student_id'])) {
+        return false;
+    }
+
     if ($filters['status'] && 0 !== strcasecmp($student['status'], $filters['status'])) {
         return false;
     }
@@ -744,6 +784,7 @@ function sdd_student_matches_filters($student, $filters) {
                 [
                     $student['name'],
                     $student['email'],
+                    $student['username'],
                     $student['church'],
                     $student['city'],
                     $student['state'],
@@ -897,6 +938,7 @@ function sdd_get_course_view_data($filters) {
 function sdd_render_filter_summary($filters, $result_count) {
     $active = [];
     $labels = [
+        'student_id' => 'Aluno',
         'search' => 'Busca',
         'status' => 'Status',
         'activity' => 'Atividade',
@@ -915,7 +957,10 @@ function sdd_render_filter_summary($filters, $result_count) {
             continue;
         }
 
-        if ('course_id' === $key) {
+        if ('student_id' === $key) {
+            $user = get_user_by('id', absint($value));
+            $value = $user ? sdd_get_student_name($user) : $value;
+        } elseif ('course_id' === $key) {
             $course = get_post(absint($value));
             $value = $course ? $course->post_title : $value;
         } elseif ('activity' === $key) {
@@ -1496,7 +1541,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                         <?php foreach ($student['courses'] as $course) : ?>
                                             <div>
                                                 <strong><?php echo esc_html($course['title']); ?></strong>
-                                                <span><?php echo esc_html($course['status'] . ' · ' . $course['progress'] . '%'); ?></span>
+                                                <span><?php echo esc_html($course['status'] . ' · ' . $course['progress'] . '% · Matrícula: ' . $course['enrolled_label'] . ' · Conclusão: ' . $course['completed_label']); ?></span>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
