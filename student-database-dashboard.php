@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.25
+ * Version: 1.0.27
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.25');
+define('SDD_VERSION', '1.0.27');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -114,7 +114,7 @@ function sdd_ajax_export_students() {
     header('Content-Disposition: attachment; filename=ibbi-alunos-' . gmdate('Y-m-d') . '.csv');
 
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Nome', 'Email', 'WhatsApp', 'Igreja', 'Cidade', 'Estado', 'Status', 'Nivel', 'Teologia', 'Supervisor', 'Cursos concluidos', 'Cursos matriculados', 'Progresso medio', 'Ultima atividade', 'Prioridade', 'Ultimo contato', 'Acompanhamento atualizado', 'Notas']);
+    fputcsv($output, ['Nome', 'Email', 'WhatsApp', 'Igreja', 'Cidade', 'Estado', 'Status', 'Nivel', 'Teologia', 'Supervisor', 'Matérias concluídas', 'Matérias inscritas', 'Progresso medio', 'Ultima atividade', 'Prioridade', 'Ultimo contato', 'Acompanhamento atualizado', 'Notas']);
 
     foreach ($students as $student) {
         fputcsv(
@@ -232,7 +232,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
     <section class="sdd-dashboard" data-sdd-dashboard>
         <header class="sdd-dashboard__header">
             <div>
-                <p class="sdd-dashboard__eyebrow"><?php echo esc_html__('Bible Institute', 'sdd'); ?></p>
+                <p class="sdd-dashboard__eyebrow"><?php echo esc_html__('Instituto Bíblico', 'sdd'); ?></p>
                 <h2><?php echo esc_html($atts['title']); ?></h2>
             </div>
             <div class="sdd-dashboard__status">
@@ -241,7 +241,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
         </header>
 
         <nav class="sdd-tabs" aria-label="<?php echo esc_attr__('Visões do painel', 'sdd'); ?>">
-            <button class="sdd-tab is-active" type="button" data-sdd-view="overview"><?php echo esc_html__('Overview', 'sdd'); ?></button>
+            <button class="sdd-tab is-active" type="button" data-sdd-view="overview"><?php echo esc_html__('Visão geral', 'sdd'); ?></button>
             <button class="sdd-tab" type="button" data-sdd-view="person"><?php echo esc_html__('Por Pessoa', 'sdd'); ?></button>
             <button class="sdd-tab" type="button" data-sdd-view="course"><?php echo esc_html__('Por Matéria', 'sdd'); ?></button>
         </nav>
@@ -249,7 +249,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
         <form class="sdd-filters" data-sdd-filters>
             <label>
                 <span><?php echo esc_html__('Pesquisar', 'sdd'); ?></span>
-                <input type="search" name="search" placeholder="<?php echo esc_attr__('Nome, igreja, cidade, curso...', 'sdd'); ?>">
+                <input type="search" name="search" placeholder="<?php echo esc_attr__('Nome, igreja, cidade, matéria...', 'sdd'); ?>">
             </label>
             <label>
                 <span><?php echo esc_html__('Status', 'sdd'); ?></span>
@@ -283,7 +283,7 @@ function sdd_render_staff_dashboard_shortcode($atts = []) {
             <label>
                 <span><?php echo esc_html__('Curso', 'sdd'); ?></span>
                 <select name="course_id">
-                    <option value=""><?php echo esc_html__('Todos os cursos', 'sdd'); ?></option>
+                    <option value=""><?php echo esc_html__('Todas as matérias', 'sdd'); ?></option>
                     <?php foreach (sdd_get_tutor_courses() as $course) : ?>
                         <option value="<?php echo esc_attr($course->ID); ?>"><?php echo esc_html($course->post_title); ?></option>
                     <?php endforeach; ?>
@@ -495,6 +495,13 @@ function sdd_get_user_meta_first($user_id, array $keys, $default = '') {
     return $default;
 }
 
+function sdd_get_study_level($user_id) {
+    $value = sdd_get_user_meta_first($user_id, ['_bi_level', 'nivel', 'nivel_associacao', 'membership_level']);
+    $levels = ['basico' => 'Básico', 'intermediario' => 'Intermediário', 'avancado' => 'Avançado'];
+
+    return $levels[strtolower(remove_accents(trim((string) $value)))] ?? $value;
+}
+
 function sdd_get_student_last_activity($user_id) {
     $last_login = absint(get_user_meta($user_id, 'last_login', true));
     $last_activity = $last_login;
@@ -645,6 +652,87 @@ function sdd_get_student_academic_issues($user_id) {
     return $issues_by_user[absint($user_id)] ?? [];
 }
 
+function sdd_get_incomplete_course_items($course_id, $user_id) {
+    global $wpdb;
+
+    if (!function_exists('tutor_utils')) {
+        return [];
+    }
+
+    $course_id = absint($course_id);
+    $user_id = absint($user_id);
+    $contents = (array) tutor_utils()->get_course_contents_by_id($course_id);
+    $quiz_ids = [];
+
+    foreach ($contents as $content) {
+        if ('tutor_quiz' === $content->post_type) {
+            $quiz_ids[] = absint($content->ID);
+        }
+    }
+
+    $completed_quiz_ids = [];
+
+    if ($quiz_ids) {
+        $placeholders = implode(',', array_fill(0, count($quiz_ids), '%d'));
+        $parameters = array_merge([$user_id], $quiz_ids, ['attempt_started']);
+        $completed_quiz_ids = array_map(
+            'absint',
+            $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT quiz_id
+                     FROM {$wpdb->prefix}tutor_quiz_attempts
+                     WHERE user_id = %d
+                       AND quiz_id IN ({$placeholders})
+                       AND attempt_status != %s",
+                    $parameters
+                )
+            )
+        );
+    }
+
+    $incomplete_items = [];
+
+    foreach ($contents as $content) {
+        $content_id = absint($content->ID);
+
+        switch ($content->post_type) {
+            case 'lesson':
+                $completed = (bool) tutor_utils()->is_completed_lesson($content_id, $user_id);
+                $type_label = 'Aula';
+                break;
+            case 'tutor_quiz':
+                $completed = in_array($content_id, $completed_quiz_ids, true);
+                $type_label = 'Questionário';
+                break;
+            case 'tutor_assignments':
+                $completed = (bool) tutor_utils()->is_assignment_submitted($content_id, $user_id);
+                $type_label = 'Tarefa';
+                break;
+            case 'tutor_zoom_meeting':
+                $completed = (bool) apply_filters('tutor_is_zoom_lesson_done', false, $content_id, $user_id);
+                $type_label = 'Encontro';
+                break;
+            case 'tutor-google-meet':
+                $completed = (bool) apply_filters('tutor_google_meet_lesson_done', false, $content_id, $user_id);
+                $type_label = 'Encontro';
+                break;
+            default:
+                continue 2;
+        }
+
+        if (!$completed) {
+            $incomplete_items[] = [
+                'id' => $content_id,
+                'title' => get_the_title($content_id),
+                'type' => $content->post_type,
+                'type_label' => $type_label,
+            ];
+        }
+    }
+
+    return $incomplete_items;
+}
+
 function sdd_get_student_courses($user_id) {
     global $wpdb;
 
@@ -665,7 +753,10 @@ function sdd_get_student_courses($user_id) {
         }
 
         $course_id = absint($course->ID);
-        $progress = absint(tutor_utils()->get_course_completed_percent($course_id, $user_id));
+        $progress_stats = tutor_utils()->get_course_completed_percent($course_id, $user_id, true);
+        $progress = absint($progress_stats['completed_percent'] ?? 0);
+        $content_completed_count = absint($progress_stats['completed_count'] ?? 0);
+        $content_count = absint($progress_stats['total_count'] ?? 0);
         $completed = (bool) tutor_utils()->is_completed_course($course_id, $user_id);
         $is_elective = sdd_is_elective_course($course_id);
         $enrolled_at = $wpdb->get_var(
@@ -689,6 +780,11 @@ function sdd_get_student_courses($user_id) {
             'progress' => min(100, $progress),
             'status' => $completed ? 'Concluído' : ($progress > 0 ? 'Em andamento' : 'Não iniciado'),
             'completed' => $completed,
+            'content_completed_count' => $content_completed_count,
+            'content_count' => $content_count,
+            'incomplete_content_count' => max(0, $content_count - $content_completed_count),
+            'incomplete_items' => [],
+            'incomplete_items_loaded' => false,
             'elective' => $is_elective,
             'requirement_label' => $is_elective ? 'Optativa' : 'Obrigatória',
             'enrolled_at' => $enrolled_at,
@@ -699,6 +795,18 @@ function sdd_get_student_courses($user_id) {
     }
 
     return $courses;
+}
+
+function sdd_enrich_student_course_requirements($student) {
+    foreach ($student['courses'] as &$course) {
+        $course['incomplete_items_loaded'] = true;
+        $course['incomplete_items'] = $course['completed']
+            ? []
+            : sdd_get_incomplete_course_items($course['id'], $student['id']);
+    }
+    unset($course);
+
+    return $student;
 }
 
 function sdd_get_student_summary($user) {
@@ -817,7 +925,7 @@ function sdd_get_student_summary($user) {
         'city' => sdd_get_user_meta_first($user_id, ['cidade', 'city']),
         'state' => sdd_get_user_meta_first($user_id, ['estado', 'state']),
         'status' => sdd_get_user_meta_first($user_id, ['_bi_student_status', 'status_aluno'], 'Ativo'),
-        'level' => sdd_get_user_meta_first($user_id, ['_bi_level', 'nivel', 'nivel_associacao']),
+        'level' => sdd_get_study_level($user_id),
         'payment' => sdd_get_user_meta_first($user_id, ['_bi_payment_status', 'pagamento', 'es']),
         'supervisor' => sdd_get_user_meta_first($user_id, ['_bi_supervisor', 'supervisor']),
         'co_validation' => sdd_get_user_meta_first($user_id, ['_bi_covalidation_status', 'co_validacao', 'validacao']),
@@ -964,6 +1072,10 @@ function sdd_get_student_signals($student) {
     return array_values(array_unique($signals));
 }
 
+function sdd_normalize_search_text($value) {
+    return strtolower(remove_accents((string) $value));
+}
+
 function sdd_student_matches_filters($student, $filters) {
     if (!empty($filters['student_id']) && absint($student['id']) !== absint($filters['student_id'])) {
         return false;
@@ -1020,7 +1132,7 @@ function sdd_student_matches_filters($student, $filters) {
     }
 
     if ($filters['search']) {
-        $haystack = strtolower(
+        $haystack = sdd_normalize_search_text(
             implode(
                 ' ',
                 [
@@ -1036,7 +1148,7 @@ function sdd_student_matches_filters($student, $filters) {
             )
         );
 
-        if (false === strpos($haystack, strtolower($filters['search']))) {
+        if (false === strpos($haystack, sdd_normalize_search_text($filters['search']))) {
             return false;
         }
     }
@@ -1097,10 +1209,35 @@ function sdd_student_matches_progress_range($student, $range) {
 
 function sdd_get_filtered_students($filters) {
     $students = [];
+    $include_course_requirements = !empty($filters['student_id']) || '' !== trim((string) $filters['search']);
+    $users = sdd_get_student_users();
 
-    foreach (sdd_get_student_users() as $user) {
+    if ('' !== trim((string) $filters['search'])) {
+        $search = sdd_normalize_search_text($filters['search']);
+        $identity_matches = array_values(array_filter($users, static function ($user) use ($search) {
+            $identity = sdd_normalize_search_text(
+                implode(' ', [sdd_get_student_name($user), $user->user_email, $user->user_login])
+            );
+
+            return false !== strpos($identity, $search);
+        }));
+
+        if ($identity_matches) {
+            $users = $identity_matches;
+        }
+    }
+
+    foreach ($users as $user) {
+        if (!empty($filters['student_id']) && absint($user->ID) !== absint($filters['student_id'])) {
+            continue;
+        }
+
         $student = sdd_get_student_summary($user);
         if (sdd_student_matches_filters($student, $filters)) {
+            if ($include_course_requirements) {
+                $student = sdd_enrich_student_course_requirements($student);
+            }
+
             $students[] = $student;
         }
     }
@@ -1363,11 +1500,11 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_metric_card('Alunos', $metrics['total'], 'no filtro atual'); ?>
         <?php sdd_metric_card('Progresso médio', $metrics['average_progress'] . '%', 'entre alunos listados'); ?>
         <?php sdd_metric_card('Inativos 30+ dias', $metrics['inactive_30'], 'precisam de atenção'); ?>
-        <?php sdd_metric_card('Follow-up', $metrics['needs_followup'], 'baixo progresso/parado'); ?>
+        <?php sdd_metric_card('Acompanhamento', $metrics['needs_followup'], 'baixo progresso/parado'); ?>
         <?php sdd_metric_card('Novos este ano', $metrics['insights']['enrolled_year'], 'por data de matrícula'); ?>
         <?php sdd_metric_card('Novos 6 meses', $metrics['insights']['enrolled_six_months'], 'matrículas recentes'); ?>
-        <?php sdd_metric_card('Cursos concluídos', $metrics['insights']['completed_courses'], 'em todos os alunos filtrados'); ?>
-        <?php sdd_metric_card('Com conclusão', $metrics['insights']['students_with_completion'], 'alunos com 1+ curso concluído'); ?>
+        <?php sdd_metric_card('Matérias concluídas', $metrics['insights']['completed_courses'], 'em todos os alunos filtrados'); ?>
+        <?php sdd_metric_card('Com conclusão', $metrics['insights']['students_with_completion'], 'alunos com 1+ matéria concluída'); ?>
         <?php sdd_metric_card('Sem contato', $metrics['insights']['never_contacted'], 'nenhum contato registrado'); ?>
         <?php sdd_metric_card('Contato 30+ dias', $metrics['insights']['contact_due_30'], 'precisam retomada'); ?>
         <?php sdd_metric_card('Contato 7 dias', $metrics['insights']['contacted_7'], 'acompanhados recentemente'); ?>
@@ -1389,7 +1526,7 @@ function sdd_render_overview($students, $metrics) {
         <?php sdd_render_overview_panel('Contato atrasado', 'Nunca contatados ou sem contato há 30+ dias', $contact_due_students, 'contact'); ?>
         <?php sdd_render_overview_panel('Perto de concluir', 'Progresso alto, mas ainda incompleto', $near_completion_students, 'student'); ?>
         <?php sdd_render_overview_panel('Sem progresso após matrícula', 'Matriculados com progresso em 0%', $no_progress_students, 'student'); ?>
-        <?php sdd_render_overview_panel('Cursos com gargalo', 'Mais alunos parados ou com baixo progresso', $course_bottlenecks, 'course'); ?>
+        <?php sdd_render_overview_panel('Matérias com dificuldades', 'Mais alunos parados ou com baixo progresso', $course_bottlenecks, 'course'); ?>
     </div>
     <?php echo sdd_render_person_view(array_slice($followup_students ?: $students, 0, 12), 'Alunos para acompanhar'); ?>
     <?php
@@ -1419,7 +1556,7 @@ function sdd_render_overview_focus($followup_students, $inactive_students, $near
             </article>
             <article>
                 <strong><?php echo esc_html($top_course ? $top_course['title'] : 'Sem gargalo'); ?></strong>
-                <span><?php echo esc_html($top_course ? 'curso com maior gargalo' : 'nenhum curso crítico no filtro'); ?></span>
+                <span><?php echo esc_html($top_course ? 'matéria com maior dificuldade' : 'nenhuma matéria crítica no filtro'); ?></span>
             </article>
         </div>
     </section>
@@ -1469,7 +1606,7 @@ function sdd_get_overview_insights($students) {
         }
 
         if ($enrolled_at) {
-            $month_key = date_i18n('M/y', $enrolled_at);
+            $month_key = date_i18n('m/y', $enrolled_at);
             if (isset($enrollment_trend[$month_key])) {
                 $enrollment_trend[$month_key]++;
             }
@@ -1549,7 +1686,7 @@ function sdd_get_recent_month_buckets($months, $now) {
 
     for ($i = $months - 1; $i >= 0; $i--) {
         $timestamp = strtotime('-' . $i . ' months', $now);
-        $buckets[date_i18n('M/y', $timestamp)] = 0;
+        $buckets[date_i18n('m/y', $timestamp)] = 0;
     }
 
     return $buckets;
@@ -1614,11 +1751,11 @@ function sdd_render_overview_panel($title, $hint, $items, $type) {
                         <article class="sdd-overview-item">
                             <strong><?php echo esc_html($item['name']); ?></strong>
                             <?php if ('contact' === $type) : ?>
-                                <span><?php echo esc_html('Último contato: ' . sdd_get_last_contact_label($item) . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                                <span><?php echo esc_html('Último contato: ' . sdd_get_last_contact_label($item) . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' matérias'); ?></span>
                             <?php elseif ('cleanup' === $type) : ?>
                                 <span><?php echo esc_html('Faltando: ' . implode(', ', array_slice($item['missing_fields'], 0, 4))); ?></span>
                             <?php else : ?>
-                                <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' cursos'); ?></span>
+                                <span><?php echo esc_html($item['last_activity_label'] . ' · ' . $item['completed_count'] . '/' . $item['course_count'] . ' matérias'); ?></span>
                             <?php endif; ?>
                             <?php if ($item['signals']) : ?>
                                 <div class="sdd-signal-list">
@@ -1666,7 +1803,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                         <th><?php echo esc_html__('Aluno', 'sdd'); ?></th>
                         <th><?php echo esc_html__('Igreja / Local', 'sdd'); ?></th>
                         <th><?php echo esc_html__('Status', 'sdd'); ?></th>
-                        <th><?php echo esc_html__('Cursos', 'sdd'); ?></th>
+                        <th><?php echo esc_html__('Matérias', 'sdd'); ?></th>
                         <th><?php echo esc_html__('Progresso', 'sdd'); ?></th>
                         <th><?php echo esc_html__('Última atividade', 'sdd'); ?></th>
                     </tr>
@@ -1728,7 +1865,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Supervisor', 'sdd'); ?></dt><dd><?php echo esc_html($student['supervisor'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Co-validação', 'sdd'); ?></dt><dd><?php echo esc_html($student['co_validation'] ?: 'Não informado'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Prioridade', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_attention_label($student['attention_score'])); ?></dd></div>
-                                            <div><dt><?php echo esc_html__('Cursos no Tutor', 'sdd'); ?></dt><dd><?php echo esc_html($student['completed_count'] . '/' . $student['course_count'] . ' concluídos'); ?></dd></div>
+                                            <div><dt><?php echo esc_html__('Matérias no Tutor', 'sdd'); ?></dt><dd><?php echo esc_html($student['completed_count'] . '/' . $student['course_count'] . ' concluídas'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Matérias obrigatórias', 'sdd'); ?></dt><dd><?php echo esc_html($student['required_approved_count'] . '/' . $student['required_course_count'] . ' aprovadas'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Matérias optativas', 'sdd'); ?></dt><dd><?php echo esc_html($student['elective_completed_count'] . '/' . $student['elective_course_count'] . ' concluídas'); ?></dd></div>
                                             <div><dt><?php echo esc_html__('Certificado', 'sdd'); ?></dt><dd><?php echo esc_html($student['certificate_ready'] ? 'Apto para emissão' : $student['certificate_label']); ?></dd></div>
@@ -1795,7 +1932,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div class="sdd-academic-issues">
                                                 <div class="sdd-academic-issues__header">
                                                     <h4><?php echo esc_html__('Pendências acadêmicas', 'sdd'); ?></h4>
-                                                    <span><?php echo esc_html__('Revise as atividades abaixo. Somente pendências obrigatórias bloqueiam o certificado.', 'sdd'); ?></span>
+                                                    <span><?php echo esc_html__('Estas atividades aguardam ação do professor. Conteúdos que o aluno ainda precisa concluir no Tutor aparecem separadamente em cada matéria abaixo.', 'sdd'); ?></span>
                                                 </div>
                                                 <div class="sdd-academic-issue-list">
                                                     <?php foreach ($student['academic_issues'] as $issue) : ?>
@@ -1838,12 +1975,24 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                                         'Tutor: ' . $course['status']
                                                         . ' · Instituto: ' . $course['academic_status']
                                                         . ' · Requisito: ' . $course['requirement_label']
-                                                        . ' · ' . $course['progress'] . '%'
+                                                        . ' · Conteúdo Tutor: ' . $course['content_completed_count'] . '/' . $course['content_count']
+                                                        . ' (' . $course['progress'] . '%)'
                                                         . ' · Matrícula: ' . $course['enrolled_label']
                                                         . ' · Conclusão Tutor: ' . $course['completed_label']
                                                     );
                                                     ?>
                                                 </span>
+                                                <?php if ($course['incomplete_items_loaded'] && $course['incomplete_items']) : ?>
+                                                    <?php
+                                                    $incomplete_labels = array_map(static function ($item) {
+                                                        return $item['title'] . ' (' . $item['type_label'] . ')';
+                                                    }, $course['incomplete_items']);
+                                                    ?>
+                                                    <small class="sdd-course-requirements">
+                                                        <b><?php echo esc_html__('Falta concluir no Tutor:', 'sdd'); ?></b>
+                                                        <?php echo esc_html(implode(' · ', $incomplete_labels)); ?>
+                                                    </small>
+                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>

@@ -926,6 +926,20 @@
   margin-bottom: 4px;
 }
 
+.sdd-course-requirements {
+  border-top: 1px solid #ead9b1;
+  color: #6f5010;
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 7px;
+  padding-top: 6px;
+}
+
+.sdd-course-requirements b {
+  color: #563d08;
+}
+
 .sdd-loading,
 .sdd-empty,
 .sdd-dashboard-message {
