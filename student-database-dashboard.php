@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.27
+ * Version: 1.0.28
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.27');
+define('SDD_VERSION', '1.0.28');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -29,6 +29,37 @@ add_action('init', 'sdd_register_shortcodes');
 function sdd_register_shortcodes() {
     add_shortcode('ibbi_staff_dashboard', 'sdd_render_staff_dashboard_shortcode');
     add_shortcode('ibbi_dashboard', 'sdd_render_staff_dashboard_shortcode');
+}
+
+add_filter('tutor_dashboard/nav_items', 'sdd_add_tutor_dashboard_hub_link', 50);
+function sdd_add_tutor_dashboard_hub_link($links) {
+    if (!sdd_current_user_can_view_dashboard()) {
+        return $links;
+    }
+
+    $links['ibbi-academic-hub'] = [
+        'title' => __('Painel Acadêmico', 'sdd'),
+        'url' => home_url('/hub-codex/'),
+        'icon' => 'tutor-icon-chart-pie',
+    ];
+
+    return $links;
+}
+
+add_action('admin_bar_menu', 'sdd_add_admin_bar_hub_link', 90);
+function sdd_add_admin_bar_hub_link($wp_admin_bar) {
+    if (!sdd_current_user_can_view_dashboard()) {
+        return;
+    }
+
+    $wp_admin_bar->add_node([
+        'id' => 'ibbi-academic-hub',
+        'title' => __('Painel Acadêmico', 'sdd'),
+        'href' => home_url('/hub-codex/'),
+        'meta' => [
+            'title' => __('Abrir o Painel Acadêmico IBBI', 'sdd'),
+        ],
+    ]);
 }
 
 add_action('wp_enqueue_scripts', 'sdd_register_assets');
