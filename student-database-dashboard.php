@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.29
+ * Version: 1.0.30
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.29');
+define('SDD_VERSION', '1.0.30');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -550,7 +550,11 @@ function sdd_get_whatsapp_number($number) {
         return '55' . $digits;
     }
 
-    return $digits;
+    if ('+' === substr($raw_number, 0, 1) && strlen($digits) >= 8 && strlen($digits) <= 15) {
+        return $digits;
+    }
+
+    return '';
 }
 
 function sdd_get_whatsapp_url($number) {
@@ -1043,7 +1047,11 @@ function sdd_get_student_missing_fields($student) {
     $missing = [];
 
     foreach ($fields as $key => $label) {
-        if (empty($student[$key])) {
+        $is_missing = 'whatsapp' === $key
+            ? !sdd_get_whatsapp_url($student[$key] ?? '')
+            : empty($student[$key]);
+
+        if ($is_missing) {
             $missing[] = $label;
         }
     }
@@ -1874,13 +1882,16 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                 </thead>
                 <tbody>
                     <?php foreach ($students as $student) : ?>
-                        <?php $detail_id = 'sdd-student-detail-' . absint($student['id']); ?>
+                        <?php
+                        $detail_id = 'sdd-student-detail-' . absint($student['id']);
+                        $whatsapp_url = sdd_get_whatsapp_url($student['whatsapp']);
+                        ?>
                         <tr class="sdd-student-row">
                             <td>
                                 <strong><?php echo esc_html($student['name']); ?></strong>
                                 <span><?php echo esc_html($student['email']); ?></span>
-                                <?php if ($student['whatsapp']) : ?>
-                                    <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
+                                <?php if ($whatsapp_url) : ?>
+                                    <a href="<?php echo esc_url($whatsapp_url); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
                                 <?php endif; ?>
                                 <button class="sdd-detail-toggle" type="button" data-sdd-toggle="<?php echo esc_attr($detail_id); ?>" aria-expanded="false" aria-controls="<?php echo esc_attr($detail_id); ?>">
                                     <?php echo esc_html__('Ver detalhes', 'sdd'); ?>
@@ -1937,8 +1948,8 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                             <div><dt><?php echo esc_html__('Último contato', 'sdd'); ?></dt><dd><?php echo esc_html(sdd_get_last_contact_label($student)); ?></dd></div>
                                         </dl>
                                         <div class="sdd-quick-actions">
-                                            <?php if ($student['whatsapp']) : ?>
-                                                <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Abrir WhatsApp', 'sdd'); ?></a>
+                                            <?php if ($whatsapp_url) : ?>
+                                                <a href="<?php echo esc_url($whatsapp_url); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Abrir WhatsApp', 'sdd'); ?></a>
                                             <?php endif; ?>
                                             <button type="button" data-sdd-mark-contacted="<?php echo esc_attr($student['id']); ?>"><?php echo esc_html__('Marcar contato hoje', 'sdd'); ?></button>
                                             <span data-sdd-contact-status></span>
@@ -2123,13 +2134,14 @@ function sdd_render_course_view($courses) {
                                     <?php if ($course['attention_students']) : ?>
                                         <div class="sdd-attention-list">
                                             <?php foreach (array_slice($course['attention_students'], 0, 12) as $student) : ?>
+                                                <?php $whatsapp_url = sdd_get_whatsapp_url($student['whatsapp']); ?>
                                                 <article class="sdd-attention-item">
                                                     <div>
                                                         <strong><?php echo esc_html($student['name']); ?></strong>
                                                         <span><?php echo esc_html($student['last_activity_label'] . ' · ' . $student['progress'] . '%'); ?></span>
                                                     </div>
-                                                    <?php if ($student['whatsapp']) : ?>
-                                                        <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
+                                                    <?php if ($whatsapp_url) : ?>
+                                                        <a href="<?php echo esc_url($whatsapp_url); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
                                                     <?php endif; ?>
                                                 </article>
                                             <?php endforeach; ?>
