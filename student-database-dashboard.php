@@ -2,13 +2,13 @@
 /**
  * Plugin Name: IBBI Staff Dashboard
  * Description: Staff-facing Bible Institute dashboard for Tutor LMS student progress and academic follow-up.
- * Version: 1.0.28
+ * Version: 1.0.29
  * Author: Mike Schmidt / OpenAI
  */
 
 defined('ABSPATH') || exit;
 
-define('SDD_VERSION', '1.0.28');
+define('SDD_VERSION', '1.0.29');
 define('SDD_PLUGIN_FILE', __FILE__);
 define('SDD_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SDD_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -524,6 +524,39 @@ function sdd_get_user_meta_first($user_id, array $keys, $default = '') {
     }
 
     return $default;
+}
+
+function sdd_get_whatsapp_number($number) {
+    $raw_number = trim((string) $number);
+    $digits = preg_replace('/\D+/', '', $raw_number);
+
+    if (!$digits) {
+        return '';
+    }
+
+    if (0 === strpos($digits, '00')) {
+        $digits = substr($digits, 2);
+    }
+
+    if (0 === strpos($digits, '55') && in_array(strlen($digits), [12, 13], true)) {
+        return $digits;
+    }
+
+    if ('0' === substr($digits, 0, 1) && in_array(strlen($digits), [11, 12], true)) {
+        $digits = substr($digits, 1);
+    }
+
+    if ('+' !== substr($raw_number, 0, 1) && in_array(strlen($digits), [10, 11], true)) {
+        return '55' . $digits;
+    }
+
+    return $digits;
+}
+
+function sdd_get_whatsapp_url($number) {
+    $whatsapp_number = sdd_get_whatsapp_number($number);
+
+    return $whatsapp_number ? 'https://wa.me/' . $whatsapp_number : '';
 }
 
 function sdd_get_study_level($user_id) {
@@ -1847,7 +1880,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                 <strong><?php echo esc_html($student['name']); ?></strong>
                                 <span><?php echo esc_html($student['email']); ?></span>
                                 <?php if ($student['whatsapp']) : ?>
-                                    <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
+                                    <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
                                 <?php endif; ?>
                                 <button class="sdd-detail-toggle" type="button" data-sdd-toggle="<?php echo esc_attr($detail_id); ?>" aria-expanded="false" aria-controls="<?php echo esc_attr($detail_id); ?>">
                                     <?php echo esc_html__('Ver detalhes', 'sdd'); ?>
@@ -1905,7 +1938,7 @@ function sdd_render_person_view($students, $title = 'Alunos') {
                                         </dl>
                                         <div class="sdd-quick-actions">
                                             <?php if ($student['whatsapp']) : ?>
-                                                <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Abrir WhatsApp', 'sdd'); ?></a>
+                                                <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('Abrir WhatsApp', 'sdd'); ?></a>
                                             <?php endif; ?>
                                             <button type="button" data-sdd-mark-contacted="<?php echo esc_attr($student['id']); ?>"><?php echo esc_html__('Marcar contato hoje', 'sdd'); ?></button>
                                             <span data-sdd-contact-status></span>
@@ -2096,7 +2129,7 @@ function sdd_render_course_view($courses) {
                                                         <span><?php echo esc_html($student['last_activity_label'] . ' · ' . $student['progress'] . '%'); ?></span>
                                                     </div>
                                                     <?php if ($student['whatsapp']) : ?>
-                                                        <a href="<?php echo esc_url('https://wa.me/' . preg_replace('/\D+/', '', $student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
+                                                        <a href="<?php echo esc_url(sdd_get_whatsapp_url($student['whatsapp'])); ?>" target="_blank" rel="noopener"><?php echo esc_html__('WhatsApp', 'sdd'); ?></a>
                                                     <?php endif; ?>
                                                 </article>
                                             <?php endforeach; ?>
